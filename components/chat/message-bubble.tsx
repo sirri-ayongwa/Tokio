@@ -5,7 +5,6 @@ import Image from 'next/image'
 import { CheckCheck, Languages, PackageCheck, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
-import { PRODUCT, SHOP } from '@/lib/constants'
 import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
 import { useLang, interpolate } from '@/lib/i18n'
 import type { Message } from '@/lib/types'
@@ -17,6 +16,7 @@ export function MessageBubble({ message }: { message: Message }) {
   const { state, user } = useStore()
   const { t } = useLang()
   const own = message.senderUserId ? message.senderUserId === user.id : message.sender === state.role
+  const conversation = state.conversations.find((item) => item.id === message.conversationId)
   const initials = user.name
     .split(/\s+/)
     .map((w) => w[0])
@@ -28,8 +28,8 @@ export function MessageBubble({ message }: { message: Message }) {
     <li className={cn('flex gap-2', own ? 'justify-end' : 'justify-start')}>
       {!own && (
         <span className="mt-auto hidden size-7 shrink-0 overflow-hidden rounded-full border bg-card sm:block">
-          {message.sender === 'seller' ? (
-            <Image src={SHOP.logo} alt="" width={28} height={28} className="size-full object-cover" />
+          {message.sender === 'seller' && conversation?.merchant_avatar_url ? (
+            <Image src={conversation.merchant_avatar_url} alt="" width={28} height={28} unoptimized className="size-full object-cover" />
           ) : (
             <span className="grid size-full place-items-center bg-sky-100 text-[10px] font-semibold text-sky-800">
               {initials}
@@ -39,7 +39,7 @@ export function MessageBubble({ message }: { message: Message }) {
       )}
       <div className={cn('flex max-w-[85%] flex-col sm:max-w-[70%]', own ? 'items-end' : 'items-start')}>
         {message.kind === 'text' && <TextContent message={message} own={own} />}
-        {message.kind === 'product' && <ProductContent />}
+        {message.kind === 'product' && <ProductContent productId={message.productId} />}
         {message.kind === 'image' && message.imageUrl && <ImageContent src={message.imageUrl} />}
         {message.kind === 'order' && message.orderId && <OrderContent orderId={message.orderId} />}
         <span className="mt-1 flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
@@ -115,20 +115,23 @@ function ImageContent({ src }: { src: string }) {
   )
 }
 
-function ProductContent() {
+function ProductContent({ productId }: { productId?: string }) {
+  const { state } = useStore()
   const { t } = useLang()
+  const product = state.products.find((item) => item.id === productId)
+  if (!product) return null
   return (
     <div className="flex w-64 gap-3 rounded-2xl border bg-card p-2.5 shadow-xs">
       <Image
-        src={PRODUCT.image}
-        alt={PRODUCT.name}
+        src={product.image_url || '/placeholder.jpg'}
+        alt={product.name}
         width={64}
         height={64}
         className="size-16 shrink-0 rounded-xl object-cover"
       />
       <div className="min-w-0 py-0.5">
-        <p className="truncate text-sm font-medium">{PRODUCT.name}</p>
-        <p className="text-sm font-semibold text-primary">{formatTaka(PRODUCT.price)}</p>
+        <p className="truncate text-sm font-medium">{product.name}</p>
+        <p className="text-sm font-semibold text-primary">{formatTaka(product.price)}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {t('chat.inStock')} · {t('chat.sharedByBuyer')}
         </p>

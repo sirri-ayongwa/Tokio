@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Eye, EyeOff, Loader2, Lock, MapPin, Smartphone } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import Image from 'next/image'
+import { Camera, Eye, EyeOff, FileCheck, Loader2, Lock, MapPin, PackagePlus, Smartphone, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { PhoneBadge } from '@/components/shared/badges'
 import { Button } from '@/components/ui/button'
+import { authClient } from '@/lib/auth-client'
 
 export function SettingsScreen() {
   const { state, actions, user } = useStore()
@@ -17,6 +19,10 @@ export function SettingsScreen() {
   const [address, setAddress] = useState(savedAddress)
   const [savingAddress, setSavingAddress] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [uploading, setUploading] = useState<string | null>(null)
+  const [productName, setProductName] = useState('')
+  const [productPrice, setProductPrice] = useState('')
+  const photoRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setAddress(savedAddress)
@@ -58,6 +64,42 @@ export function SettingsScreen() {
     }
   }
 
+  const upload = async (event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'nid' | 'passport' | 'tradeLicense') => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setUploading(kind)
+    try {
+      const url = await actions.uploadImage(file)
+      if (kind === 'avatar') {
+        await Promise.all([actions.updateProfile({ avatarUrl: url }), authClient.updateUser({ image: url })])
+      } else {
+        await actions.updateProfile({ verificationDocument: { type: kind, url } })
+      }
+      toast.success(kind === 'avatar' ? 'Profile photo saved' : 'Document uploaded for review')
+    } catch (error) {
+      toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  const addProduct = async () => {
+    try {
+      await actions.addProduct({ name: productName.trim(), price: Number(productPrice) })
+      setProductName('')
+      setProductPrice('')
+      toast.success('Product added')
+    } catch (error) {
+      toast.error('Could not add product', { description: error instanceof Error ? error.message : undefined })
+    }
+  }
+
+  const clearAll = () => {
+    if (!window.confirm(t('nav.clearConfirm'))) return
+    actions.clearAll().then(() => toast.success(t('nav.cleared'))).catch((error) => toast.error(t('nav.clearFail'), { description: error.message }))
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
@@ -72,9 +114,11 @@ export function SettingsScreen() {
           </h2>
           <p className="text-xs text-muted-foreground">{t('settings.profileDesc')}</p>
           <div className="mt-4 flex items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">
-              {initials}
-            </span>
+            <button type="button" onClick={() => photoRef.current?.click()} className="group relative size-14 shrink-0 overflow-hidden rounded-full bg-muted" aria-label="Upload profile photo">
+              {state.avatarUrl ? <Image src={state.avatarUrl} alt="" fill unoptimized className="object-cover" /> : <span className="grid size-full place-items-center text-sm font-semibold">{initials}</span>}
+              <span className="absolute right-0 top-0 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground shadow"><Camera className="size-3.5" /></span>
+            </button>
+            <input ref={photoRef} type="file" accept="image/*" className="sr-only" onChange={(event) => upload(event, 'avatar')} />
             <div className="min-w-0">
               <p className="truncate font-medium">{user.name}</p>
               <p className="truncate text-sm text-muted-foreground">{user.email}</p>
@@ -109,6 +153,37 @@ export function SettingsScreen() {
               )}
             </li>
           </ul>
+        </section>
+
+        <section className="rounded-2xl border bg-card p-4">
+          <h2 className="flex items-center gap-2 font-semibold"><FileCheck className="size-4 text-primary" />Identity verification</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Uploaded documents remain pending until reviewed. Verification badges appear only after approval.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {(isMerchant ? [['tradeLicense', 'Trade licence', state.tradeLicenseUrl], ['nid', 'NID', state.nidUrl]] : [['nid', 'NID', state.nidUrl], ['passport', 'Passport', state.passportUrl]]).map(([kind, label, value]) => (
+              <label key={kind} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 text-sm hover:border-primary/50">
+                <span><span className="block font-medium">{label}</span><span className="text-xs text-muted-foreground">{value ? 'Pending review' : 'Not uploaded'}</span></span>
+                {uploading === kind ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4 text-muted-foreground" />}
+                <input type="file" accept="image/*" className="sr-only" onChange={(event) => upload(event, kind as 'nid' | 'passport' | 'tradeLicense')} />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {isMerchant && <section className="rounded-2xl border bg-card p-4">
+          <h2 className="flex items-center gap-2 font-semibold"><PackagePlus className="size-4 text-primary" />Products</h2>
+          <p className="text-xs text-muted-foreground">Products you add appear in shopper conversations and can be shared in chat.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_8rem_auto]">
+            <input value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Product name" className="h-10 rounded-lg border bg-background px-3 text-sm" />
+            <input value={productPrice} onChange={(event) => setProductPrice(event.target.value)} type="number" min="1" placeholder="Price" className="h-10 rounded-lg border bg-background px-3 text-sm" />
+            <Button type="button" onClick={addProduct} disabled={!productName.trim() || Number(productPrice) <= 0}>Add</Button>
+          </div>
+          {state.products.length > 0 && <ul className="mt-3 divide-y rounded-xl border">{state.products.map((product) => <li key={product.id} className="flex justify-between px-3 py-2 text-sm"><span>{product.name}</span><span className="font-medium">৳{product.price}</span></li>)}</ul>}
+        </section>}
+
+        <section className="rounded-2xl border border-destructive/30 bg-card p-4">
+          <h2 className="font-semibold">Data</h2>
+          <p className="mb-3 text-xs text-muted-foreground">Clear your messages, orders, and reviews.</p>
+          <Button type="button" variant="outline" onClick={clearAll}><Trash2 className="size-4" />{t('nav.clearData')}</Button>
         </section>
 
         <section aria-labelledby="settings-privacy" className="rounded-2xl border bg-card p-4">

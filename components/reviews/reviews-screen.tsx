@@ -41,10 +41,10 @@ export function ReviewsScreen() {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{t('rv.title')}</h1>
-            <p className="text-sm text-muted-foreground">{t('rv.sub')}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{state.accountRole === 'merchant' ? 'Customer reviews' : 'Your reviews & purchases'}</h1>
+            <p className="text-sm text-muted-foreground">{state.accountRole === 'merchant' ? 'See feedback from customers who completed an order with your business.' : 'Review delivered purchases and see feedback from other verified buyers.'}</p>
           </div>
-          <button
+          {state.accountRole !== 'merchant' && <button
             type="button"
             onClick={startReview}
             aria-disabled={!eligible}
@@ -57,7 +57,7 @@ export function ReviewsScreen() {
           >
             {eligible ? <PenLine className="size-4" aria-hidden /> : <Lock className="size-4" aria-hidden />}
             {t('rv.write')}
-          </button>
+          </button>}
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
@@ -100,7 +100,7 @@ export function ReviewsScreen() {
               </ul>
             </section>
 
-            {!eligible && (
+            {state.accountRole !== 'merchant' && !eligible && (
               <p className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                 <Lock className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden />
                 {pendingChatOrder

@@ -17,6 +17,7 @@ export interface Message {
   translation?: string
   orderId?: string
   imageUrl?: string
+  productId?: string
   time: string
 }
 
@@ -34,8 +35,14 @@ export interface Conversation {
   shopper_id: string
   merchant_id: string
   shopper_email: string | null
+  shopper_verified: boolean
   merchant_name: string | null
   merchant_category: string | null
+  merchant_avatar_url: string | null
+  merchant_verified: boolean
+  merchant_created_at: string | Date | null
+  completed_orders: number
+  response_seconds: number | null
   last_message: string | null
   updated_at: string | Date
 }
@@ -44,6 +51,17 @@ export interface Merchant {
   id: string
   name: string
   category: string | null
+  avatar_url: string | null
+  verified: boolean
+}
+
+export interface Product {
+  id: string
+  merchant_id: string
+  name: string
+  price: number
+  image_url: string | null
+  stock_status: string
 }
 
 export interface Order extends OrderDraft {
@@ -113,6 +131,7 @@ export interface MessageRow {
   translation: string | null
   order_id: string | null
   image_url: string | null
+  product_id: string | null
   created_at: string | Date
 }
 
@@ -143,6 +162,11 @@ export interface ProfileRow {
   address: string | null
   pickup_address: string | null
   address_visible: boolean
+  avatar_url: string | null
+  verification_status: 'unverified' | 'pending' | 'verified'
+  nid_url: string | null
+  passport_url: string | null
+  trade_license_url: string | null
 }
 
 export type LiveKind = 'orders' | 'messages' | 'reviews' | 'reviewMarks' | 'profile'

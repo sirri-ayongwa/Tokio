@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { BadgeCheck, Info, Languages, MessageCircle, Sparkles, Store } from 'lucide-react'
+import { BadgeCheck, Info, Languages, MessageCircle, Search, Sparkles, Store } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { hasOrderSignals } from '@/lib/extract-order'
 import { useLang } from '@/lib/i18n'
@@ -50,10 +50,10 @@ export function ChatScreen() {
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-1.5 truncate font-semibold">
               {peerName}
-              {state.accountRole === 'shopper' && <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified seller" />}
+              {((state.accountRole === 'shopper' && active.merchant_verified) || (state.accountRole === 'merchant' && active.shopper_verified)) && <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified account" />}
             </h1>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-primary">{t('chat.online')}</span> · Verified seller · {t('chat.responseTime')}
+              <span className="font-medium text-primary">{t('chat.online')}</span> · {state.accountRole === 'merchant' ? 'Shopper' : active.merchant_category || 'Merchant'}
             </p>
           </div>
           <button
@@ -136,6 +136,8 @@ export function ChatScreen() {
 function EmptyChat() {
   const { state, actions } = useStore()
   const merchant = state.accountRole === 'merchant'
+  const [query, setQuery] = useState('')
+  const merchants = state.merchants.filter((item) => `${item.name} ${item.category ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-md text-center">
@@ -147,15 +149,21 @@ function EmptyChat() {
           {merchant ? 'New shopper messages will appear here.' : 'Choose a registered merchant to begin chatting.'}
         </p>
         {!merchant && (
-          <div className="mt-5 space-y-2 text-left">
-            {state.merchants.length === 0 ? (
+          <div className="mt-5 text-left">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search businesses" className="h-11 w-full rounded-xl border bg-card pl-10 pr-3 text-sm" />
+            </label>
+            <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+            {merchants.length === 0 ? (
               <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">No merchant accounts are available yet.</p>
-            ) : state.merchants.map((item) => (
+            ) : merchants.map((item) => (
               <button key={item.id} type="button" onClick={() => actions.startConversation(item.id)} className="flex w-full items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50">
                 <span className="grid size-10 place-items-center rounded-full bg-accent font-semibold text-primary">{item.name.slice(0, 1).toUpperCase()}</span>
                 <span><span className="block font-medium">{item.name}</span><span className="text-xs text-muted-foreground">{item.category || 'Merchant'}</span></span>
               </button>
             ))}
+            </div>
           </div>
         )}
       </div>

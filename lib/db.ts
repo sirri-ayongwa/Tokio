@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS profiles (
   address text,
   address_visible boolean NOT NULL DEFAULT false,
   category text,
+  avatar_url text,
+  verification_status text NOT NULL DEFAULT 'unverified',
+  nid_url text,
+  passport_url text,
+  trade_license_url text,
+  created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -33,6 +39,23 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pickup_address text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address_visible boolean NOT NULL DEFAULT false;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS category text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verification_status text NOT NULL DEFAULT 'unverified';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nid_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS passport_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trade_license_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+CREATE TABLE IF NOT EXISTS products (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id text NOT NULL,
+  name text NOT NULL,
+  price double precision NOT NULL,
+  image_url text,
+  stock_status text NOT NULL DEFAULT 'In stock',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS products_merchant_idx ON products (merchant_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS conversations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,6 +109,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id uuid REFERENCES conversations (id) ON DELETE CASCADE;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_user_id text;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES products (id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS messages_user_idx ON messages (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -127,9 +151,10 @@ export function ensureSchema() {
   // The serverless driver runs one statement per query, so split the DDL.
   schemaPromise ??= sqlDirect`
     SELECT to_regclass('public.conversations') IS NOT NULL
+       AND to_regclass('public.products') IS NOT NULL
        AND EXISTS (
          SELECT 1 FROM information_schema.columns
-         WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'conversation_id'
+         WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'product_id'
        ) AS ready`
     .then(([row]) =>
       row?.ready

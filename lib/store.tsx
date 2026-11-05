@@ -27,6 +27,7 @@ import type {
   OrderDraft,
   OrderRow,
   ProfileRow,
+  Product,
   Review,
   ReviewMarkRow,
   ReviewRow,
@@ -54,6 +55,7 @@ interface State extends PersistedPrefs {
   messages: Message[]
   conversations: Conversation[]
   merchants: Merchant[]
+  products: Product[]
   activeConversationId: string | null
   orders: Order[]
   reviews: Review[]
@@ -64,6 +66,11 @@ interface State extends PersistedPrefs {
   address: string | null
   pickupAddress: string | null
   addressVisible: boolean
+  avatarUrl: string | null
+  verificationStatus: 'unverified' | 'pending' | 'verified'
+  nidUrl: string | null
+  passportUrl: string | null
+  tradeLicenseUrl: string | null
   synced: boolean
 }
 
@@ -77,6 +84,7 @@ type Action =
   | { type: 'synced' }
   | { type: 'conversationData'; conversations: Conversation[]; merchants: Merchant[]; role: AccountRole }
   | { type: 'selectConversation'; id: string | null }
+  | { type: 'products'; products: Product[] }
   | { type: 'setTab'; tab: Tab }
   | { type: 'openOrder'; id: string | null }
   | { type: 'startReview'; orderId: string | null }
@@ -93,6 +101,7 @@ const initialState: State = {
   messages: [],
   conversations: [],
   merchants: [],
+  products: [],
   activeConversationId: null,
   orders: [],
   reviews: [],
@@ -103,6 +112,11 @@ const initialState: State = {
   address: null,
   pickupAddress: null,
   addressVisible: false,
+  avatarUrl: null,
+  verificationStatus: 'unverified',
+  nidUrl: null,
+  passportUrl: null,
+  tradeLicenseUrl: null,
   synced: false,
   lang: 'en',
   role: 'buyer',
@@ -122,6 +136,7 @@ const toMessage = (r: MessageRow): Message => ({
   translation: r.translation ?? undefined,
   orderId: r.order_id ?? undefined,
   imageUrl: r.image_url ?? undefined,
+  productId: r.product_id ?? undefined,
   time: fmtTime(toDate(r.created_at)),
 })
 
@@ -180,6 +195,11 @@ function reducer(state: State, action: Action): State {
           address: p?.address ?? null,
           pickupAddress: p?.pickup_address ?? null,
           addressVisible: p?.address_visible ?? false,
+          avatarUrl: p?.avatar_url ?? null,
+          verificationStatus: p?.verification_status ?? 'unverified',
+          nidUrl: p?.nid_url ?? null,
+          passportUrl: p?.passport_url ?? null,
+          tradeLicenseUrl: p?.trade_license_url ?? null,
         }
       }
       if (action.kind === 'reviewMarks') {
@@ -208,6 +228,8 @@ function reducer(state: State, action: Action): State {
       }
     case 'selectConversation':
       return { ...state, activeConversationId: action.id }
+    case 'products':
+      return { ...state, products: action.products }
     case 'setTab':
       return { ...state, tab: action.tab }
     case 'openOrder':
@@ -260,6 +282,7 @@ interface StoreCtx {
       translation?: string
       orderId?: string
       imageUrl?: string
+      productId?: string
     }) => Promise<void>
     startConversation: (merchantId: string) => Promise<void>
     confirmOrder: (draft: OrderDraft) => Promise<{ orderId: string; ref: string }>
@@ -270,7 +293,10 @@ interface StoreCtx {
       address?: string
       pickupAddress?: string
       addressVisible?: boolean
+      avatarUrl?: string
+      verificationDocument?: { type: 'nid' | 'passport' | 'tradeLicense'; url: string }
     }) => Promise<void>
+    addProduct: (body: { name: string; price: number; imageUrl?: string }) => Promise<void>
     addReview: (r: { orderId: string; rating: number; text: string; photos: string[] }) => Promise<void>
     toggleHelpful: (id: string) => Promise<void>
     uploadImage: (file: File) => Promise<string>
@@ -377,6 +403,12 @@ export function StoreProvider({
         const r = await api('/api/profile', body)
         await wait('profile', r.txid)
       },
+      addProduct: async (body) => {
+        await api('/api/products', body)
+        const res = await fetch(`/api/products?merchantId=${encodeURIComponent(user.id)}`)
+        const data = await res.json()
+        dispatch({ type: 'products', products: data.products ?? [] })
+      },
       addReview: async (r) => {
         const res = await api('/api/reviews', r)
         await wait('reviews', res.txid)
@@ -403,7 +435,7 @@ export function StoreProvider({
         await api('/api/reset')
       },
     }),
-    [wait, state.activeConversationId],
+    [wait, state.activeConversationId, user.id],
   )
 
   const ctx = useMemo<StoreCtx>(
@@ -420,6 +452,16 @@ export function StoreProvider({
       .then((data) => dispatch({ type: 'conversationData', ...data }))
       .catch((error) => toast.error('Chat could not load', { description: error.message }))
   }, [])
+
+  useEffect(() => {
+    const conversation = state.conversations.find((item) => item.id === state.activeConversationId)
+    const merchantId = state.accountRole === 'merchant' ? user.id : conversation?.merchant_id
+    if (!merchantId) return dispatch({ type: 'products', products: [] })
+    fetch(`/api/products?merchantId=${encodeURIComponent(merchantId)}`)
+      .then((res) => res.json())
+      .then((data) => dispatch({ type: 'products', products: data.products ?? [] }))
+      .catch(() => dispatch({ type: 'products', products: [] }))
+  }, [state.activeConversationId, state.accountRole, state.conversations, user.id])
 
   return (
     <RealtimeProvider client={rtClient}>

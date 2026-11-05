@@ -73,7 +73,7 @@ export function AppShell() {
   return (
     <div className="flex h-dvh flex-col bg-background md:flex-row">
       <aside className="hidden w-16 shrink-0 flex-col border-r bg-sidebar md:flex lg:w-60">
-        <div className="flex h-16 items-center gap-2.5 px-3.5 lg:px-5">
+        <div className="hidden">
           <BrandMark />
           <div className="hidden min-w-0 lg:block">
             <p className="font-heading font-semibold leading-tight tracking-tight">Tokio</p>
@@ -111,14 +111,14 @@ export function AppShell() {
           })}
         </nav>
         <div className="space-y-1 border-t p-3">
-          <p className="hidden truncate px-2.5 pb-1 text-xs text-muted-foreground lg:block" title={user.email}>
+          <p className="hidden" title={user.email}>
             {t('nav.signedInAs')} <span className="font-medium text-foreground">{user.name}</span>
           </p>
           <button
             type="button"
             onClick={clearAll}
             title={t('nav.clearData')}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="hidden"
           >
             <Trash2 className="size-4 shrink-0" aria-hidden />
             <span className="hidden lg:inline">{t('nav.clearData')}</span>

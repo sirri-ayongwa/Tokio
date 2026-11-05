@@ -47,11 +47,9 @@ export function OrdersScreen() {
             <p className="text-sm text-muted-foreground">{t('orders.sub')}</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            {interpolate(t('orders.revenue'), {
-              total: formatTaka(
-                orders.filter((o) => o.status === 'completed').reduce((s, o) => s + orderTotal(o), 0),
-              ),
-            })}
+            {state.accountRole === 'merchant' ? interpolate(t('orders.revenue'), {
+              total: formatTaka(orders.filter((o) => o.status === 'completed').reduce((s, o) => s + orderTotal(o), 0)),
+            }) : `Spent: ${formatTaka(orders.filter((o) => o.status !== 'cancelled').reduce((sum, order) => sum + orderTotal(order), 0))}`}
           </p>
         </header>
 

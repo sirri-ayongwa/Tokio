@@ -28,7 +28,7 @@ export const liveQueries = {
     rawSql(`SELECT ${ORDER_COLS} FROM orders WHERE user_id = $1 OR shopper_id = $1 OR merchant_id = $1 ORDER BY created_at DESC`, [userId]),
   messages: (userId: string) =>
     rawSql(
-      `SELECT m.id, m.conversation_id, m.sender_user_id, m.sender, m.kind, m.text,
+      `SELECT m.id, m.conversation_id, m.sender_user_id, m.sender, m.kind, m.text, m.product_id,
               m.lang, m.translation, m.order_id, m.image_url, m.created_at
          FROM messages m
          LEFT JOIN conversations c ON c.id = m.conversation_id
@@ -46,7 +46,8 @@ export const liveQueries = {
     rawSql(`SELECT review_id FROM review_marks WHERE user_id = $1`, [userId]),
   profile: (userId: string) =>
     rawSql(
-      `SELECT user_id, phone, phone_verified, role, address, pickup_address, address_visible
+      `SELECT user_id, phone, phone_verified, role, address, pickup_address, address_visible,
+              avatar_url, verification_status, nid_url, passport_url, trade_license_url
          FROM profiles WHERE user_id = $1`,
       [userId],
     ),
