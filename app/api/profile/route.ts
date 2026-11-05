@@ -3,6 +3,15 @@ import { ensureSchema, sql } from '@/lib/db'
 
 const ROLES = new Set(['shopper', 'merchant'])
 
+export async function GET() {
+  const user = await requireUser()
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  await ensureSchema()
+  const [row] = await sql`
+    SELECT phone, phone_verified AS "phoneVerified", role FROM profiles WHERE user_id = ${user.id}`
+  return Response.json({ profile: row ?? null })
+}
+
 export async function POST(request: Request) {
   const user = await requireUser()
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })

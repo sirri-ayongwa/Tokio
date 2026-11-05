@@ -3,7 +3,12 @@ import { defineConfig } from "@neon/config/v1";
 export default defineConfig({
   // Declare your Neon services here
   preview: {
-    realtime: { allowedOrigins: ["http://localhost:3000"] },
+    realtime: {
+      allowedOrigins: [
+        "http://localhost:3000",
+        "https://tokio-chat.vercel.app",
+      ],
+    },
   },
   auth: true,
   // AI Gateway needs a paid Neon plan. Enable when upgraded:

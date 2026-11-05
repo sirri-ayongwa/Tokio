@@ -33,6 +33,7 @@ export function OnboardingFlow({ userName }: { userName: string }) {
   const [uploading, setUploading] = useState(false)
 
   const [phone, setPhone] = useState('+880 ')
+  const [alreadyVerified, setAlreadyVerified] = useState(false)
   const [sentCode, setSentCode] = useState('')
   const [code, setCode] = useState(['', '', '', ''])
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +42,18 @@ export function OnboardingFlow({ userName }: { userName: string }) {
   const [skipOpen, setSkipOpen] = useState(false)
   const codeRefs = useRef<(HTMLInputElement | null)[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Prefill phone + verified state captured during sign-up.
+  useEffect(() => {
+    fetch('/api/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const p = data?.profile
+        if (p?.phone) setPhone(p.phone)
+        if (p?.phoneVerified) setAlreadyVerified(true)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!cooldown) return
@@ -254,14 +267,30 @@ export function OnboardingFlow({ userName }: { userName: string }) {
                 </div>
                 <p className="text-xs text-muted-foreground">{t('ob.phoneHint')}</p>
               </div>
-              {isBdPhone(phone) && (
-                <button
-                  type="button"
-                  onClick={sendCode}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                >
-                  {t('m.sendCode')}
-                </button>
+              {alreadyVerified ? (
+                <>
+                  <p className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-primary">
+                    <CheckCircle2 className="size-4" aria-hidden />
+                    {t('m.verified')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={done}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  >
+                    {t('ob.continue')}
+                  </button>
+                </>
+              ) : (
+                isBdPhone(phone) && (
+                  <button
+                    type="button"
+                    onClick={sendCode}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  >
+                    {t('m.sendCode')}
+                  </button>
+                )
               )}
               <button
                 type="button"
