@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { Languages, ShoppingBag, Store } from 'lucide-react'
 import { BrandMark } from '@/components/app-shell'
@@ -8,7 +8,20 @@ import { TAGLINE } from '@/lib/constants'
 import { getStoredLang, useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
-const SPLASH_MS = 5000
+const SPLASH_MS = 10_000
+
+const SPLASH_BUBBLES = [
+  { size: 86, left: '8%', top: '13%', depth: -90, duration: 7.2, delay: -1.4 },
+  { size: 38, left: '22%', top: '68%', depth: 70, duration: 5.8, delay: -3.1 },
+  { size: 58, left: '78%', top: '18%', depth: 130, duration: 6.5, delay: -4.2 },
+  { size: 112, left: '82%', top: '70%', depth: -120, duration: 8.4, delay: -2.3 },
+  { size: 26, left: '61%', top: '82%', depth: 180, duration: 5.2, delay: -0.8 },
+  { size: 46, left: '13%', top: '43%', depth: 120, duration: 6.1, delay: -4.8 },
+  { size: 22, left: '67%', top: '9%', depth: 210, duration: 4.8, delay: -2.7 },
+  { size: 68, left: '42%', top: '87%', depth: -50, duration: 7.7, delay: -5.2 },
+  { size: 32, left: '91%', top: '42%', depth: 90, duration: 5.5, delay: -1.9 },
+  { size: 18, left: '34%', top: '20%', depth: 240, duration: 4.6, delay: -3.5 },
+]
 
 type Phase = 'splash' | 'lang' | 'roles'
 
@@ -175,13 +188,34 @@ export function RoleSelect() {
       {phase === 'splash' && (
         <div
           className={cn(
-            'absolute inset-0 z-10 grid place-items-center bg-background transition-opacity duration-500',
+            'splash-scene absolute inset-0 z-10 grid place-items-center overflow-hidden bg-background transition-opacity duration-500',
             fading && 'opacity-0',
           )}
           role="status"
         >
-          <div className="flex flex-col items-center gap-4 text-center">
-            <BrandMark className="size-16 rounded-3xl" />
+          <div className="splash-aurora" aria-hidden />
+          <div className="splash-bubbles" aria-hidden>
+            {SPLASH_BUBBLES.map((bubble, index) => (
+              <span
+                key={index}
+                className="splash-bubble"
+                style={
+                  {
+                    '--bubble-size': `${bubble.size}px`,
+                    '--bubble-left': bubble.left,
+                    '--bubble-top': bubble.top,
+                    '--bubble-depth': `${bubble.depth}px`,
+                    '--bubble-duration': `${bubble.duration}s`,
+                    '--bubble-delay': `${bubble.delay}s`,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </div>
+          <div className="splash-content relative z-10 flex flex-col items-center gap-4 text-center">
+            <div className="splash-logo">
+              <BrandMark className="size-16 rounded-3xl shadow-2xl" />
+            </div>
             <div>
               <p className="font-heading text-3xl font-semibold tracking-tight">Tokio</p>
               <p className="mt-2 max-w-xs text-sm text-muted-foreground">{TAGLINE}</p>
