@@ -189,23 +189,62 @@ function EmptyChat() {
 
 function ConversationBar() {
   const { state, dispatch, actions } = useStore()
-  const unusedMerchants = state.merchants.filter((merchant) => !state.conversations.some((conversation) => conversation.merchant_id === merchant.id))
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const shopper = state.accountRole === 'shopper'
+  const merchants = state.merchants.filter((merchant) =>
+    `${merchant.name} ${merchant.category ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()),
+  )
+
+  const chooseMerchant = async (merchantId: string) => {
+    const existing = state.conversations.find((conversation) => conversation.merchant_id === merchantId)
+    if (existing) dispatch({ type: 'selectConversation', id: existing.id })
+    else await actions.startConversation(merchantId)
+    setPickerOpen(false)
+    setQuery('')
+  }
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-b bg-card/80 px-3 py-2">
-      {state.conversations.map((conversation) => {
-        const label = state.accountRole === 'merchant' ? conversation.shopper_name || conversation.shopper_email || 'Shopper' : conversation.merchant_name || 'Merchant'
-        return (
-          <button key={conversation.id} type="button" onClick={() => dispatch({ type: 'selectConversation', id: conversation.id })}
-            className={cn('shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors', state.activeConversationId === conversation.id ? 'border-primary bg-accent text-primary' : 'bg-background text-muted-foreground hover:text-foreground')}>
-            {label}
+    <div className="relative border-b bg-card/80">
+      <div className="flex items-center gap-2 overflow-x-auto px-3 py-2">
+        {state.conversations.map((conversation) => {
+          const label = state.accountRole === 'merchant' ? conversation.shopper_name || conversation.shopper_email || 'Shopper' : conversation.merchant_name || 'Merchant'
+          return (
+            <button key={conversation.id} type="button" onClick={() => dispatch({ type: 'selectConversation', id: conversation.id })}
+              className={cn('shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors', state.activeConversationId === conversation.id ? 'border-primary bg-accent text-primary' : 'bg-background text-muted-foreground hover:text-foreground')}>
+              {label}
+            </button>
+          )
+        })}
+        {shopper && (
+          <button type="button" onClick={() => setPickerOpen((open) => !open)} aria-expanded={pickerOpen}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary">
+            <Search className="size-3.5" aria-hidden /> Find a business
           </button>
-        )
-      })}
-      {unusedMerchants.map((merchant) => (
-        <button key={merchant.id} type="button" onClick={() => actions.startConversation(merchant.id)} className="shrink-0 rounded-full border border-dashed px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary">
-          + {merchant.name}
-        </button>
-      ))}
+        )}
+      </div>
+      {shopper && pickerOpen && (
+        <div className="absolute left-3 right-3 top-full z-30 mt-1 rounded-xl border bg-card p-3 shadow-xl sm:right-auto sm:w-96">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all businesses" className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm" />
+          </label>
+          <div className="mt-2 max-h-64 overflow-y-auto">
+            {merchants.length === 0 ? (
+              <p className="p-3 text-center text-sm text-muted-foreground">No businesses match your search.</p>
+            ) : merchants.map((merchant) => {
+              const isOpen = state.conversations.some((conversation) => conversation.merchant_id === merchant.id)
+              return (
+                <button key={merchant.id} type="button" onClick={() => void chooseMerchant(merchant.id)} className="flex w-full items-center gap-3 rounded-lg p-2.5 text-left hover:bg-muted">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent font-semibold text-primary">{merchant.name.slice(0, 1).toUpperCase()}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{merchant.name}</span><span className="block truncate text-xs text-muted-foreground">{merchant.category || 'Merchant'}</span></span>
+                  {isOpen && <span className="text-[11px] text-primary">Open</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -24,7 +24,7 @@ async function advance(orderId?: string) {
              tracking_times,
              ARRAY[(tracking_stage + 1)::text],
              to_jsonb(now()::text),
-             false
+             true
            ),
            status = CASE WHEN tracking_stage + 1 >= ${LAST_STAGE}
                          THEN 'completed' ELSE status END

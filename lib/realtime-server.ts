@@ -36,11 +36,16 @@ export const liveQueries = {
         ORDER BY m.created_at`,
       [userId],
     ),
-  reviews: (_userId: string) =>
+  reviews: (userId: string) =>
     rawSql(
-      `SELECT id, user_id, order_id, name, initials, avatar_color, rating, text,
-              photos, verified, helpful, created_at
-         FROM reviews ORDER BY created_at DESC`,
+      `SELECT r.id, r.user_id, r.order_id, r.name, r.initials, r.avatar_color, r.rating, r.text,
+              r.photos, r.verified, r.helpful, r.created_at
+         FROM reviews r
+         LEFT JOIN orders o ON o.id = r.order_id
+         LEFT JOIN profiles viewer ON viewer.user_id = $1
+        WHERE viewer.role = 'shopper' OR r.user_id = $1 OR o.merchant_id = $1
+        ORDER BY r.created_at DESC`,
+      [userId],
     ),
   reviewMarks: (userId: string) =>
     rawSql(`SELECT review_id FROM review_marks WHERE user_id = $1`, [userId]),

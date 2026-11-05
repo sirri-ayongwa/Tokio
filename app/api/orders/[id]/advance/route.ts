@@ -1,6 +1,25 @@
 import { requireUser } from '@/lib/auth-server'
 import { ensureSchema, sql } from '@/lib/db'
 
+const LAST_STAGE = 4
+
+async function advanceDirectly(id: string) {
+  const rows = await sql`
+    UPDATE orders
+       SET tracking_stage = tracking_stage + 1,
+           tracking_times = jsonb_set(
+             tracking_times,
+             ARRAY[(tracking_stage + 1)::text],
+             to_jsonb(now()::text),
+             true
+           ),
+           status = CASE WHEN tracking_stage + 1 >= ${LAST_STAGE}
+                         THEN 'completed' ELSE status END
+     WHERE id = ${id} AND status = 'active' AND tracking_stage < ${LAST_STAGE}
+     RETURNING id, ref, tracking_stage, status`
+  return { advanced: rows.length, orders: rows }
+}
+
 // Asks the deployed Neon courier function for the latest tracking scan.
 // The function updates Postgres; Realtime pushes the change to open clients.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,16 +33,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const fnUrl = process.env.NEON_FUNCTION_COURIER_BASE_URL
   if (!fnUrl) {
-    return Response.json({ error: 'Courier function is not deployed' }, { status: 503 })
+    return Response.json(await advanceDirectly(id))
   }
 
-  const res = await fetch(`${fnUrl.replace(/\/$/, '')}/advance`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-secret': process.env.COURIER_SECRET! },
-    body: JSON.stringify({ orderId: id }),
-    cache: 'no-store',
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) return Response.json({ error: 'Courier sync failed', detail: data }, { status: 502 })
-  return Response.json(data)
+  try {
+    const res = await fetch(`${fnUrl.replace(/\/$/, '')}/advance`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-secret': process.env.COURIER_SECRET ?? '' },
+      body: JSON.stringify({ orderId: id }),
+      cache: 'no-store',
+    })
+    if (res.ok) return Response.json(await res.json())
+  } catch {
+    // Keep simulated tracking functional if the external courier is unavailable.
+  }
+  return Response.json(await advanceDirectly(id))
 }

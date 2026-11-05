@@ -89,8 +89,10 @@ export async function POST(request: Request) {
                     updated_at = now()
       RETURNING user_id
     )
-    UPDATE orders SET customer_phone_verified = ${body.phoneVerified === true}
-    WHERE user_id = ${user.id} AND from_chat = true AND ${body.phoneVerified !== undefined}
-    RETURNING pg_current_xact_id()::text AS txid`
+    , updated_orders AS (
+      UPDATE orders SET customer_phone_verified = ${body.phoneVerified === true}
+      WHERE user_id = ${user.id} AND from_chat = true AND ${body.phoneVerified !== undefined}
+    )
+    SELECT pg_current_xact_id()::text AS txid FROM p`
   return Response.json({ kind: 'committed', txid: row?.txid ?? null })
 }
