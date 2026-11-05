@@ -153,6 +153,7 @@ function EmptyChat() {
   const { state, actions } = useStore()
   const merchant = state.accountRole === 'merchant'
   const [query, setQuery] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const merchants = state.merchants.filter((item) => `${item.name} ${item.category ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-6">
@@ -165,23 +166,37 @@ function EmptyChat() {
           {merchant ? 'New shopper messages will appear here.' : 'Choose a registered merchant to begin chatting.'}
         </p>
         {!merchant && (
-          <div className="mt-5 text-left">
+          <div
+            className="relative mt-5 text-left"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPickerOpen(false)
+            }}
+          >
             <label className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search businesses" className="h-11 w-full rounded-xl border bg-card pl-10 pr-3 text-sm" />
+              <input
+                value={query}
+                onFocus={() => setPickerOpen(true)}
+                onChange={(event) => { setQuery(event.target.value); setPickerOpen(true) }}
+                placeholder="Search businesses"
+                role="combobox"
+                aria-expanded={pickerOpen}
+                aria-controls="business-search-results"
+                className="h-11 w-full rounded-xl border bg-card pl-10 pr-3 text-sm"
+              />
             </label>
-            <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+            {pickerOpen && <div id="business-search-results" className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 space-y-1 overflow-y-auto rounded-xl border bg-card p-2 shadow-xl">
             {state.merchantLoadStatus === 'error' ? (
-              <p className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-center text-sm text-destructive">Businesses could not be loaded. Please reload the page and try again.</p>
+              <p className="p-3 text-center text-sm text-destructive">Businesses could not be loaded. Please reload the page and try again.</p>
             ) : merchants.length === 0 ? (
               <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">{state.merchantLoadStatus === 'loading' ? 'Loading businesses…' : 'No merchant accounts are available yet.'}</p>
             ) : merchants.map((item) => (
-              <button key={item.id} type="button" onClick={() => actions.startConversation(item.id)} className="flex w-full items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50">
+              <button key={item.id} type="button" onClick={() => void actions.startConversation(item.id)} className="flex w-full items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-muted focus:bg-muted">
                 <span className="grid size-10 place-items-center rounded-full bg-accent font-semibold text-primary">{item.name.slice(0, 1).toUpperCase()}</span>
                 <span><span className="block font-medium">{item.name}</span><span className="text-xs text-muted-foreground">{item.category || 'Merchant'}</span></span>
               </button>
             ))}
-            </div>
+            </div>}
           </div>
         )}
       </div>

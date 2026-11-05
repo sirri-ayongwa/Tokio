@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       FROM conversations c
       LEFT JOIN profiles mp ON mp.user_id = c.merchant_id
       LEFT JOIN profiles sp ON sp.user_id = c.shopper_id
-      LEFT JOIN neon_auth."user" su ON su.id = c.shopper_id
+      LEFT JOIN neon_auth."user" su ON su.id::text = c.shopper_id
      WHERE c.id = ${d.conversationId} AND ${user.id} IN (c.shopper_id, c.merchant_id)`
   if (!conversation) return Response.json({ error: 'Conversation not found' }, { status: 404 })
   if (conversation.merchant_id !== user.id) {

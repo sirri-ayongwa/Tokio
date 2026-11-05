@@ -38,7 +38,7 @@ export async function GET() {
            (SELECT m.text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
       FROM conversations c
       LEFT JOIN profiles sp ON sp.user_id = c.shopper_id
-      LEFT JOIN neon_auth."user" su ON su.id = c.shopper_id
+      LEFT JOIN neon_auth."user" su ON su.id::text = c.shopper_id
       LEFT JOIN profiles mp ON mp.user_id = c.merchant_id
      WHERE ${user.id} IN (c.shopper_id, c.merchant_id)
      ORDER BY c.updated_at DESC`
