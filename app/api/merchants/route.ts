@@ -12,12 +12,12 @@ export async function GET() {
         SELECT DISTINCT ON (lower(trim(business_name)))
                user_id AS id, business_name AS name, category, avatar_url,
                (verification_status = 'verified') AS verified, created_at
-          FROM profiles
+         FROM profiles
          WHERE role = 'merchant'
-           AND user_id <> ${user.id}
            AND NULLIF(trim(business_name), '') IS NOT NULL
          ORDER BY lower(trim(business_name)), created_at DESC
       ) merchant_list
+     WHERE id <> ${user.id}
      ORDER BY lower(name)`
 
   return Response.json({ merchants })
