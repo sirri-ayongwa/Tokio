@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { BadgeCheck, Info, Languages, MessageCircle, Search, Sparkles, Store } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { hasOrderSignals } from '@/lib/extract-order'
@@ -23,10 +24,12 @@ export function ChatScreen() {
   const active = state.conversations.find((c) => c.id === state.activeConversationId) ?? null
   const messages = state.messages.filter((m) => m.conversationId === state.activeConversationId)
   const hasChatOrder = state.orders.some((o) => o.fromChat && o.conversationId === state.activeConversationId)
-  const showAiCard = state.accountRole === 'shopper' && !hasChatOrder && hasOrderSignals(messages)
+  const showAiCard = state.accountRole === 'merchant' && !hasChatOrder && hasOrderSignals(messages)
   const peerName = state.accountRole === 'merchant'
-    ? active?.shopper_email || 'Shopper'
+    ? active?.shopper_name || active?.shopper_email || 'Shopper'
     : active?.merchant_name || 'Merchant'
+  const peerAvatar = state.accountRole === 'merchant' ? active?.shopper_avatar_url : active?.merchant_avatar_url
+  const peerOnline = state.accountRole === 'merchant' ? active?.shopper_online : active?.merchant_online
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
@@ -45,10 +48,12 @@ export function ChatScreen() {
         <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
           <span className="relative shrink-0">
             <span className="grid size-11 place-items-center rounded-full border bg-accent font-semibold text-primary">
-              {peerName.slice(0, 1).toUpperCase()}
+              {peerAvatar
+                ? <Image src={peerAvatar} alt="" width={44} height={44} unoptimized className="size-full rounded-full object-cover" />
+                : peerName.slice(0, 1).toUpperCase()}
             </span>
             <span
-              className="absolute right-0 bottom-0 size-3 rounded-full border-2 border-card bg-emerald-500"
+              className={cn('absolute right-0 bottom-0 size-3 rounded-full border-2 border-card', peerOnline ? 'bg-emerald-500' : 'bg-red-500')}
               aria-hidden
             />
           </span>
@@ -58,7 +63,9 @@ export function ChatScreen() {
               {((state.accountRole === 'shopper' && active.merchant_verified) || (state.accountRole === 'merchant' && active.shopper_verified)) && <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified account" />}
             </h1>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-primary">{t('chat.online')}</span> · {state.accountRole === 'merchant' ? 'Shopper' : active.merchant_category || 'Merchant'}
+              <span className={cn('font-medium', peerOnline ? 'text-primary' : 'text-red-500')}>
+                {peerOnline ? t('chat.online') : t('chat.offline')}
+              </span>{' · '}{state.accountRole === 'merchant' ? 'Shopper' : active.merchant_category || 'Merchant'}
             </p>
           </div>
           <button
@@ -83,7 +90,7 @@ export function ChatScreen() {
             </p>
             <ol className="space-y-4" aria-label="Messages" aria-live="polite">
               {messages.map((m) => (
-                <MessageBubble key={m.id} message={m} />
+                <MessageBubble key={m.id} message={m} onReorder={() => setAiOpen(true)} />
               ))}
               {sellerTyping && (
                 <li className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -133,7 +140,7 @@ export function ChatScreen() {
       <Modal open={state.accountRole === 'shopper' && infoOpen} onClose={() => setInfoOpen(false)} title={t('chat.about')}>
         <ChatInfoPanel />
       </Modal>
-      <AiOrderModal open={aiOpen} onClose={() => setAiOpen(false)} />
+      <AiOrderModal open={state.accountRole === 'merchant' && aiOpen} onClose={() => setAiOpen(false)} />
     </div>
   )
 }
@@ -182,7 +189,7 @@ function ConversationBar() {
   return (
     <div className="flex items-center gap-2 overflow-x-auto border-b bg-card/80 px-3 py-2">
       {state.conversations.map((conversation) => {
-        const label = state.accountRole === 'merchant' ? conversation.shopper_email || 'Shopper' : conversation.merchant_name || 'Merchant'
+        const label = state.accountRole === 'merchant' ? conversation.shopper_name || conversation.shopper_email || 'Shopper' : conversation.merchant_name || 'Merchant'
         return (
           <button key={conversation.id} type="button" onClick={() => dispatch({ type: 'selectConversation', id: conversation.id })}
             className={cn('shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors', state.activeConversationId === conversation.id ? 'border-primary bg-accent text-primary' : 'bg-background text-muted-foreground hover:text-foreground')}>

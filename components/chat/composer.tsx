@@ -28,7 +28,7 @@ export function Composer({
   const send = (value: string) => {
     const body = value.trim()
     if (!body) return
-    const lang = langOf(body) === 'bn' ? 'bn' : state.lang
+    const lang = langOf(body)
     actions
       .sendMessage({ kind: 'text', lang, text: body })
       .catch((e) => toast.error(t('chat.msgFail'), { description: e.message }))
@@ -107,7 +107,7 @@ export function Composer({
           placeholder={t('chat.msgPlaceholder')}
           className="h-11 min-w-0 flex-1 rounded-full border border-input bg-background px-4 text-[15px] placeholder:text-muted-foreground"
         />
-        {state.accountRole === 'shopper' && (
+        {state.accountRole === 'merchant' && (
           <button
             type="button"
             onClick={onOpenAi}

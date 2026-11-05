@@ -50,6 +50,12 @@ export function AppShell() {
   }
 
   const signOut = async () => {
+    await fetch('/api/presence', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ online: false }),
+      keepalive: true,
+    }).catch(() => {})
     try {
       await authClient.signOut()
     } catch {}

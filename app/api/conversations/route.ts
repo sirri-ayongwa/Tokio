@@ -12,10 +12,15 @@ export async function GET() {
     SELECT c.id, c.shopper_id, c.merchant_id, c.updated_at,
            c.shopper_read_at, c.merchant_read_at,
            sp.email AS shopper_email,
+           COALESCE(su.name, sp.email) AS shopper_name,
+           sp.address AS shopper_address,
+           sp.avatar_url AS shopper_avatar_url,
+           (sp.last_seen_at > now() - interval '45 seconds') AS shopper_online,
            (sp.verification_status = 'verified') AS shopper_verified,
            COALESCE(mp.business_name, mp.email) AS merchant_name,
            mp.category AS merchant_category,
            mp.avatar_url AS merchant_avatar_url,
+           (mp.last_seen_at > now() - interval '45 seconds') AS merchant_online,
            (mp.verification_status = 'verified') AS merchant_verified,
            mp.created_at AS merchant_created_at,
            (SELECT count(*)::int FROM orders o WHERE o.merchant_id = c.merchant_id AND o.status = 'completed') AS completed_orders,
@@ -31,6 +36,7 @@ export async function GET() {
            (SELECT m.text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
       FROM conversations c
       LEFT JOIN profiles sp ON sp.user_id = c.shopper_id
+      LEFT JOIN neon_auth."user" su ON su.id = c.shopper_id
       LEFT JOIN profiles mp ON mp.user_id = c.merchant_id
      WHERE ${user.id} IN (c.shopper_id, c.merchant_id)
      ORDER BY c.updated_at DESC`

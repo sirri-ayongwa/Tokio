@@ -11,6 +11,15 @@ interface ChatMsg {
   text?: string
 }
 
+interface PreviousOrder {
+  product: string
+  quantity: number
+  unitPrice: number
+  deliveryFee: number
+  payment: 'cod' | 'bkash'
+  address: string
+}
+
 const SYSTEM = `You are an order-extraction assistant for a chat-to-order app in Bangladesh.
 Read the chat messages and extract order details. Buyers write in English or Bangla (Bengali).
 
@@ -29,18 +38,20 @@ Rules:
 - If a price appears near "delivery" or "ডেলিভারি" it is the delivery fee, not the unit price.
 - If no product is named, use the shared product: "${PRODUCT.name}".
 - If only one price is mentioned and nothing marks it as a fee, treat it as unitPrice.
+- If a previous order is included, treat this as a redraft: keep its details unless later chat messages request changes.
 - JSON only.`
 
 export async function POST(request: Request) {
   const user = await requireUser()
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { messages } = (await request.json()) as { messages: ChatMsg[] }
-  const transcript = (messages ?? [])
+  const { messages, previousOrder } = (await request.json()) as { messages: ChatMsg[]; previousOrder?: PreviousOrder }
+  const chat = (messages ?? [])
     .filter((m) => m.text || m.kind === 'product')
     .map((m) => `${m.sender}: ${m.kind === 'product' ? `[product card: ${PRODUCT.name} — ৳${PRODUCT.price}]` : m.text}`)
     .join('\n')
-    .slice(0, 12_000)
+    .slice(0, 10_000)
+  const transcript = `${previousOrder ? `Previous order summary: ${JSON.stringify(previousOrder)}\n` : ''}${chat}`
 
   if (!transcript.trim()) {
     return Response.json({ error: 'Nothing to analyse' }, { status: 400 })

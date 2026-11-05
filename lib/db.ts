@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   nid_url text,
   passport_url text,
   trade_license_url text,
+  last_seen_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -44,6 +45,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verification_status text NOT NULL 
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nid_url text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS passport_url text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trade_license_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS products (
@@ -162,6 +164,9 @@ export function ensureSchema() {
        ) AND EXISTS (
          SELECT 1 FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'merchant_read_at'
+       ) AND EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'last_seen_at'
        ) AS ready`
     .then(([row]) =>
       row?.ready

@@ -6,9 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { PhoneBadge } from '@/components/shared/badges'
-import { PhoneVerifyButton } from '@/components/trust/phone-verify'
 import { useStore } from '@/lib/store'
-import { SHOP } from '@/lib/constants'
 import { extractOrder, type Extraction } from '@/lib/extract-order'
 import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
 import { useLang, interpolate } from '@/lib/i18n'
@@ -39,6 +37,7 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
   const [draft, setDraft] = useState<OrderDraft | null>(null)
   const [sources, setSources] = useState<Extraction['sources'] | null>(null)
   const [errors, setErrors] = useState<Errors>({})
+  const conversation = state.conversations.find((item) => item.id === state.activeConversationId)
 
   useEffect(() => {
     if (!open) return
@@ -53,19 +52,23 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
     // The server reads the whole conversation through an LLM when configured;
     // otherwise we fall back to the local extractor.
     const analyse = async () => {
+      const previousOrder = state.orders.find((order) => order.conversationId === state.activeConversationId)
       try {
         const res = await fetch('/api/extract-order', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: state.messages.filter((message) => message.conversationId === state.activeConversationId) }),
+          body: JSON.stringify({
+            messages: state.messages.filter((message) => message.conversationId === state.activeConversationId),
+            previousOrder,
+          }),
         })
         if (!res.ok) throw new Error()
         const ai = await res.json()
-        setDraft(ai)
+        setDraft({ ...ai, address: conversation?.shopper_address?.trim() || ai.address })
         setSources(null)
       } catch {
         const { draft, sources } = extractOrder(state.messages.filter((message) => message.conversationId === state.activeConversationId))
-        setDraft(draft)
+        setDraft({ ...draft, address: conversation?.shopper_address?.trim() || draft.address })
         setSources(sources)
       }
       setPhase('ready')
@@ -127,7 +130,7 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
           {t('ai.title')}
         </span>
       }
-      description={interpolate(t('ai.desc'), { shop: SHOP.name })}
+      description={interpolate(t('ai.desc'), { shop: conversation?.merchant_name || 'this shop' })}
       footer={
         phase === 'ready' && draft ? (
           <>
@@ -226,9 +229,8 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
             <div className="space-y-1">
               <p className="text-sm font-medium">{t('ai.trustCheck')}</p>
-              <PhoneBadge verified={state.phoneVerified} />
+              <PhoneBadge verified={conversation?.shopper_verified ?? false} />
             </div>
-            <PhoneVerifyButton />
           </div>
         </div>
       ) : null}

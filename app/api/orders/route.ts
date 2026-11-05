@@ -36,13 +36,17 @@ export async function POST(request: Request) {
   await ensureSchema()
 
   const [conversation] = await sql`
-    SELECT c.shopper_id, c.merchant_id, mp.business_name
+    SELECT c.shopper_id, c.merchant_id, mp.business_name,
+           COALESCE(su.name, sp.email, 'Shopper') AS shopper_name,
+           sp.phone_verified AS shopper_phone_verified
       FROM conversations c
       LEFT JOIN profiles mp ON mp.user_id = c.merchant_id
+      LEFT JOIN profiles sp ON sp.user_id = c.shopper_id
+      LEFT JOIN neon_auth."user" su ON su.id = c.shopper_id
      WHERE c.id = ${d.conversationId} AND ${user.id} IN (c.shopper_id, c.merchant_id)`
   if (!conversation) return Response.json({ error: 'Conversation not found' }, { status: 404 })
-  if (conversation.shopper_id !== user.id) {
-    return Response.json({ error: 'Only the shopper can confirm an order' }, { status: 403 })
+  if (conversation.merchant_id !== user.id) {
+    return Response.json({ error: 'Only the merchant can confirm an order' }, { status: 403 })
   }
 
   const [{ seq }] = await sql`SELECT nextval('orders_ref_seq')::int AS seq`
@@ -62,18 +66,18 @@ export async function POST(request: Request) {
         tracking_stage, tracking_times, reviewed, from_chat
       )
       VALUES (
-        ${user.id}, ${d.conversationId}, ${conversation.shopper_id}, ${conversation.merchant_id},
+        ${conversation.shopper_id}, ${d.conversationId}, ${conversation.shopper_id}, ${conversation.merchant_id},
         ${ref}, ${d.product.trim()}, ${d.image ?? null}, ${d.quantity},
         ${d.unitPrice}, ${d.deliveryFee}, ${d.payment}, ${d.address.trim()},
-        ${user.name},
-        COALESCE((SELECT phone_verified FROM profiles WHERE user_id = ${user.id}), false),
+        ${conversation.shopper_name},
+        ${conversation.shopper_phone_verified ?? false},
         ${conversation.business_name ?? d.seller ?? 'Merchant'}, 'active', ${trackingRef},
         1, ${times}::jsonb, false, true
       )
       RETURNING id
     )
     INSERT INTO messages (user_id, conversation_id, sender_user_id, sender, kind, order_id)
-    SELECT ${user.id}, ${d.conversationId}, ${user.id}, 'buyer', 'order', id FROM o
+    SELECT ${conversation.shopper_id}, ${d.conversationId}, ${user.id}, 'seller', 'order', id FROM o
     RETURNING (SELECT id FROM o) AS order_id, id AS message_id, pg_current_xact_id()::text AS txid`
 
   return Response.json({ kind: 'committed', txid: row.txid, orderId: row.order_id, ref })

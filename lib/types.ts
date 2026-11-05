@@ -36,10 +36,15 @@ export interface Conversation {
   shopper_id: string
   merchant_id: string
   shopper_email: string | null
+  shopper_name: string | null
+  shopper_address: string | null
+  shopper_avatar_url: string | null
+  shopper_online: boolean
   shopper_verified: boolean
   merchant_name: string | null
   merchant_category: string | null
   merchant_avatar_url: string | null
+  merchant_online: boolean
   merchant_verified: boolean
   merchant_created_at: string | Date | null
   completed_orders: number

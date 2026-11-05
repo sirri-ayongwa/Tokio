@@ -14,7 +14,7 @@ import {
 import { toast } from 'sonner'
 import { createRealtimeClient, type SealedLiveQuery } from '@neon/realtime/client'
 import { RealtimeProvider, useLiveQuery } from '@neon/realtime-react'
-import { PRODUCT, SHOP } from './constants'
+import { PRODUCT } from './constants'
 import { fmtDate, fmtTime } from './format'
 import type {
   AccountRole,
@@ -370,11 +370,13 @@ export function StoreProvider({
       },
       confirmOrder: async (draft) => {
         if (!state.activeConversationId) throw new Error('Choose a conversation first')
+        const conversation = state.conversations.find((item) => item.id === state.activeConversationId)
+        const product = state.products.find((item) => item.name.toLowerCase() === draft.product.trim().toLowerCase())
         const r = await api('/api/orders', {
           ...draft,
           conversationId: state.activeConversationId,
-          image: PRODUCT.image,
-          seller: SHOP.name,
+          image: product?.image_url || PRODUCT.image,
+          seller: conversation?.merchant_name || 'Merchant',
         })
         await wait('orders', r.txid)
         await wait('messages', r.txid)
@@ -436,7 +438,7 @@ export function StoreProvider({
         await api('/api/reset')
       },
     }),
-    [wait, state.activeConversationId, user.id],
+    [wait, state.activeConversationId, state.conversations, state.products, user.id],
   )
 
   const ctx = useMemo<StoreCtx>(
@@ -456,6 +458,28 @@ export function StoreProvider({
     load()
     const interval = window.setInterval(load, 4000)
     return () => { cancelled = true; window.clearInterval(interval) }
+  }, [])
+
+  useEffect(() => {
+    const updatePresence = (online: boolean) => fetch('/api/presence', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ online }),
+      keepalive: true,
+    }).catch(() => {})
+    const heartbeat = () => updatePresence(true)
+    const leave = () => {
+      const body = new Blob([JSON.stringify({ online: false })], { type: 'application/json' })
+      navigator.sendBeacon('/api/presence', body)
+    }
+    heartbeat()
+    const interval = window.setInterval(heartbeat, 20_000)
+    window.addEventListener('pagehide', leave)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('pagehide', leave)
+      leave()
+    }
   }, [])
 
   useEffect(() => {

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { Check, CheckCheck, Languages, PackageCheck, Truck } from 'lucide-react'
+import { Check, CheckCheck, Languages, PackageCheck, RotateCcw, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
@@ -12,14 +12,18 @@ import { StatusPill } from '@/components/shared/badges'
 
 const LANG_NAMES = { en: 'English', bn: 'বাংলা' } as const
 
-export function MessageBubble({ message }: { message: Message }) {
+export function MessageBubble({ message, onReorder }: { message: Message; onReorder: () => void }) {
   const { state, user } = useStore()
   const { t } = useLang()
   const own = message.senderUserId ? message.senderUserId === user.id : message.sender === state.role
   const conversation = state.conversations.find((item) => item.id === message.conversationId)
   const recipientReadAt = message.sender === 'buyer' ? conversation?.merchant_read_at : conversation?.shopper_read_at
   const read = !!recipientReadAt && new Date(recipientReadAt).getTime() >= new Date(message.createdAt).getTime()
-  const initials = user.name
+  const peerName = message.sender === 'seller'
+    ? conversation?.merchant_name || 'Merchant'
+    : conversation?.shopper_name || conversation?.shopper_email || 'Shopper'
+  const peerAvatar = message.sender === 'seller' ? conversation?.merchant_avatar_url : conversation?.shopper_avatar_url
+  const initials = peerName
     .split(/\s+/)
     .map((w) => w[0])
     .slice(0, 2)
@@ -30,8 +34,8 @@ export function MessageBubble({ message }: { message: Message }) {
     <li className={cn('flex gap-2', own ? 'justify-end' : 'justify-start')}>
       {!own && (
         <span className="mt-auto hidden size-7 shrink-0 overflow-hidden rounded-full border bg-card sm:block">
-          {message.sender === 'seller' && conversation?.merchant_avatar_url ? (
-            <Image src={conversation.merchant_avatar_url} alt="" width={28} height={28} unoptimized className="size-full object-cover" />
+          {peerAvatar ? (
+            <Image src={peerAvatar} alt="" width={28} height={28} unoptimized className="size-full object-cover" />
           ) : (
             <span className="grid size-full place-items-center bg-sky-100 text-[10px] font-semibold text-sky-800">
               {initials}
@@ -43,7 +47,7 @@ export function MessageBubble({ message }: { message: Message }) {
         {message.kind === 'text' && <TextContent message={message} own={own} />}
         {message.kind === 'product' && <ProductContent productId={message.productId} />}
         {message.kind === 'image' && message.imageUrl && <ImageContent src={message.imageUrl} />}
-        {message.kind === 'order' && message.orderId && <OrderContent orderId={message.orderId} />}
+        {message.kind === 'order' && message.orderId && <OrderContent orderId={message.orderId} onReorder={onReorder} />}
         <span className="mt-1 flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
           <span className="sr-only">
             {message.sender === 'seller' ? t('chat.seller') : t('chat.buyer')}, sent at{' '}
@@ -62,11 +66,16 @@ function TextContent({ message, own }: { message: Message; own: boolean }) {
   const { state } = useStore()
   const { t } = useLang()
   const [flipped, setFlipped] = useState(false)
-  const needsTranslation = message.lang !== state.lang && !!message.translation
+  const needsTranslation = !own && message.lang !== state.lang && !!message.translation
   const autoTranslated = needsTranslation && state.showTranslations
   const showTranslated = needsTranslation && (flipped ? !autoTranslated : autoTranslated)
   const text = showTranslated ? message.translation : message.text
   const displayLang = showTranslated ? state.lang : message.lang
+
+  useEffect(() => {
+    if (own || !state.showTranslations || !message.lang || message.lang === state.lang || message.translation) return
+    fetch(`/api/messages/${message.id}/translate`, { method: 'POST' }).catch(() => {})
+  }, [message.id, message.lang, message.translation, own, state.lang, state.showTranslations])
 
   return (
     <>
@@ -144,7 +153,7 @@ function ProductContent({ productId }: { productId?: string }) {
   )
 }
 
-function OrderContent({ orderId }: { orderId: string }) {
+function OrderContent({ orderId, onReorder }: { orderId: string; onReorder: () => void }) {
   const { state, dispatch } = useStore()
   const { t } = useLang()
   const order = state.orders.find((o) => o.id === orderId)
@@ -185,17 +194,25 @@ function OrderContent({ orderId }: { orderId: string }) {
           status={order.status}
           label={order.status === 'cancelled' ? t('orders.statusCancelled') : stageTitle}
         />
-        <button
-          type="button"
-          onClick={() => {
-            dispatch({ type: 'setTab', tab: 'orders' })
-            dispatch({ type: 'openOrder', id: order.id })
-          }}
-          className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary hover:underline"
-        >
-          <Truck className="size-4" aria-hidden />
-          {t('orders.track')}
-        </button>
+        <div className="flex items-center gap-2">
+          {state.accountRole === 'merchant' && (
+            <button type="button" onClick={onReorder} className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary hover:underline">
+              <RotateCcw className="size-4" aria-hidden />
+              {t('chat.reorder')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              dispatch({ type: 'setTab', tab: 'orders' })
+              dispatch({ type: 'openOrder', id: order.id })
+            }}
+            className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary hover:underline"
+          >
+            <Truck className="size-4" aria-hidden />
+            {t('orders.track')}
+          </button>
+        </div>
       </div>
     </div>
   )

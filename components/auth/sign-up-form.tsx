@@ -162,6 +162,7 @@ function MerchantFields() {
   const [website, setWebsite] = useState('')
   const [pickupAddress, setPickupAddress] = useState('')
   const [category, setCategory] = useState('')
+  const [customCategory, setCustomCategory] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -169,7 +170,7 @@ function MerchantFields() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!category) {
+    if (!category || (category === 'Other' && !customCategory.trim())) {
       setError(t('m.chooseCategory'))
       return
     }
@@ -186,7 +187,7 @@ function MerchantFields() {
         businessName: businessName.trim(),
         businessWebsite: website.trim() || null,
         pickupAddress: pickupAddress.trim(),
-        category,
+        category: category === 'Other' ? customCategory.trim() : category,
         phone,
         phoneVerified: verified,
       }).catch(() => {})
@@ -204,6 +205,7 @@ function MerchantFields() {
     email.trim() &&
     pickupAddress.trim() &&
     category &&
+    (category !== 'Other' || customCategory.trim()) &&
     password.length >= 6
 
   return (
@@ -318,6 +320,16 @@ function MerchantFields() {
             ))}
           </select>
         </div>
+        {category === 'Other' && (
+          <IconField
+            id="m-custom-category"
+            icon={Building2}
+            required
+            value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)}
+            placeholder={t('m.category.other.ph')}
+          />
+        )}
       </div>
 
       <div className="space-y-1.5">
