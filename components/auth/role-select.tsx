@@ -29,8 +29,10 @@ export function RoleSelect() {
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
-    // Show the splash once per browser session.
-    setPhase(window.sessionStorage.getItem('tokio-splash-seen') ? 'roles' : 'splash')
+    // Splash once per browser session; language popup until a choice is stored.
+    const seen = window.sessionStorage.getItem('tokio-splash-seen')
+    if (!seen) setPhase('splash')
+    else setPhase(getStoredLang() ? 'roles' : 'lang')
   }, [])
 
   useEffect(() => {
