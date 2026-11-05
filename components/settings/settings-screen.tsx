@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import Image from 'next/image'
-import { Camera, Eye, EyeOff, FileCheck, Loader2, Lock, MapPin, PackagePlus, Smartphone, Trash2, Upload } from 'lucide-react'
+import { Camera, Eye, EyeOff, FileCheck, Globe, Loader2, Lock, MapPin, PackagePlus, Smartphone, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { useLang } from '@/lib/i18n'
@@ -18,6 +18,8 @@ export function SettingsScreen() {
   const savedAddress = (isMerchant ? state.pickupAddress : state.address) ?? ''
   const [address, setAddress] = useState(savedAddress)
   const [savingAddress, setSavingAddress] = useState(false)
+  const [website, setWebsite] = useState(state.businessWebsite ?? '')
+  const [savingWebsite, setSavingWebsite] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
   const [productName, setProductName] = useState('')
@@ -27,6 +29,10 @@ export function SettingsScreen() {
   useEffect(() => {
     setAddress(savedAddress)
   }, [savedAddress])
+
+  useEffect(() => {
+    setWebsite(state.businessWebsite ?? '')
+  }, [state.businessWebsite])
 
   const initials = user.name
     .split(/\s+/)
@@ -61,6 +67,18 @@ export function SettingsScreen() {
       })
     } finally {
       setToggling(false)
+    }
+  }
+
+  const saveWebsite = async () => {
+    setSavingWebsite(true)
+    try {
+      await actions.updateProfile({ businessWebsite: website.trim() || null })
+      toast.success(t('settings.saved'))
+    } catch (e) {
+      toast.error(t('settings.saveFail'), { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setSavingWebsite(false)
     }
   }
 
@@ -116,7 +134,7 @@ export function SettingsScreen() {
           <div className="mt-4 flex items-center gap-3">
             <button type="button" onClick={() => photoRef.current?.click()} className="group relative size-14 shrink-0 overflow-hidden rounded-full bg-muted" aria-label="Upload profile photo">
               {state.avatarUrl ? <Image src={state.avatarUrl} alt="" fill unoptimized className="object-cover" /> : <span className="grid size-full place-items-center text-sm font-semibold">{initials}</span>}
-              <span className="absolute right-0 top-0 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground shadow"><Camera className="size-3.5" /></span>
+              <span className="absolute inset-0 grid place-items-center bg-background/15 transition-colors group-hover:bg-background/25"><span className="grid size-8 place-items-center rounded-full bg-background/45 text-foreground shadow-sm backdrop-blur-[1px]"><Camera className="size-4" /></span></span>
             </button>
             <input ref={photoRef} type="file" accept="image/*" className="sr-only" onChange={(event) => upload(event, 'avatar')} />
             <div className="min-w-0">
@@ -153,6 +171,20 @@ export function SettingsScreen() {
               )}
             </li>
           </ul>
+          {isMerchant && (
+            <div className="mt-4 border-t pt-4">
+              <label htmlFor="settings-website" className="text-sm font-medium">{t('m.website')}</label>
+              <div className="mt-1.5 flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Globe className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <input id="settings-website" type="url" value={website} onChange={(event) => setWebsite(event.target.value)} placeholder={t('m.website.ph')} className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm" />
+                </div>
+                <Button type="button" onClick={saveWebsite} disabled={savingWebsite || website.trim() === (state.businessWebsite ?? '')}>
+                  {savingWebsite && <Loader2 className="animate-spin" />}{t('settings.save')}
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border bg-card p-4">

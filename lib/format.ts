@@ -21,6 +21,14 @@ export function fmtDate(d: Date) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+export function responseLabel(seconds: number | null) {
+  if (!seconds) return 'No response average yet'
+  if (seconds < 3600) return `Replies in ~${Math.max(1, Math.round(seconds / 60))} min`
+  if (seconds < 86400) return `Replies in ~${Math.round(seconds / 3600)} hr`
+  if (seconds < 2592000) return `Replies in ~${Math.round(seconds / 86400)} days`
+  return `Replies in ~${Math.round(seconds / 2592000)} months`
+}
+
 export function fmtStamp(d: Date) {
   return `${fmtDate(d)}, ${fmtTime(d)}`
 }

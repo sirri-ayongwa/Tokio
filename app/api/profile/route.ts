@@ -10,6 +10,7 @@ export async function GET() {
   const [row] = await sql`
     SELECT phone, phone_verified AS "phoneVerified", role,
            address, pickup_address AS "pickupAddress",
+           business_website AS "businessWebsite",
            address_visible AS "addressVisible", avatar_url AS "avatarUrl",
            verification_status AS "verificationStatus",
            nid_url AS "nidUrl", passport_url AS "passportUrl",
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     phoneVerified?: boolean
     role?: string
     businessName?: string
-    businessWebsite?: string
+    businessWebsite?: string | null
     pickupAddress?: string
     address?: string
     addressVisible?: boolean
@@ -70,7 +71,9 @@ export async function POST(request: Request) {
                     phone_verified = profiles.phone_verified OR EXCLUDED.phone_verified,
                     role = COALESCE(EXCLUDED.role, profiles.role),
                     business_name = COALESCE(EXCLUDED.business_name, profiles.business_name),
-                    business_website = COALESCE(EXCLUDED.business_website, profiles.business_website),
+                    business_website = CASE WHEN ${body.businessWebsite !== undefined}
+                                       THEN EXCLUDED.business_website
+                                       ELSE profiles.business_website END,
                     pickup_address = COALESCE(EXCLUDED.pickup_address, profiles.pickup_address),
                     address = COALESCE(EXCLUDED.address, profiles.address),
                     address_visible = CASE WHEN ${body.addressVisible !== undefined}

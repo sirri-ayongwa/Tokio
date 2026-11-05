@@ -19,6 +19,8 @@ export async function GET() {
            (sp.verification_status = 'verified') AS shopper_verified,
            COALESCE(mp.business_name, mp.email) AS merchant_name,
            mp.category AS merchant_category,
+           mp.business_website AS merchant_website,
+           CASE WHEN mp.address_visible THEN mp.pickup_address ELSE NULL END AS merchant_address,
            mp.avatar_url AS merchant_avatar_url,
            (mp.last_seen_at > now() - interval '45 seconds') AS merchant_online,
            (mp.verification_status = 'verified') AS merchant_verified,

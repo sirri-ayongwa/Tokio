@@ -6,6 +6,7 @@ import { BadgeCheck, Info, Languages, MessageCircle, Search, Sparkles, Store } f
 import { useStore } from '@/lib/store'
 import { hasOrderSignals } from '@/lib/extract-order'
 import { useLang } from '@/lib/i18n'
+import { responseLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Lang } from '@/lib/types'
 import { Modal } from '@/components/ui/modal'
@@ -67,6 +68,9 @@ export function ChatScreen() {
                 {peerOnline ? t('chat.online') : t('chat.offline')}
               </span>{' · '}{state.accountRole === 'merchant' ? 'Shopper' : active.merchant_category || 'Merchant'}
             </p>
+            {state.accountRole === 'shopper' && (
+              <p className="mt-0.5 text-[11px] italic text-muted-foreground">{responseLabel(active.response_seconds)}</p>
+            )}
           </div>
           <button
             type="button"

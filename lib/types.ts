@@ -43,6 +43,8 @@ export interface Conversation {
   shopper_verified: boolean
   merchant_name: string | null
   merchant_category: string | null
+  merchant_website: string | null
+  merchant_address: string | null
   merchant_avatar_url: string | null
   merchant_online: boolean
   merchant_verified: boolean
@@ -169,6 +171,7 @@ export interface ProfileRow {
   role: AccountRole | null
   address: string | null
   pickup_address: string | null
+  business_website: string | null
   address_visible: boolean
   avatar_url: string | null
   verification_status: 'unverified' | 'pending' | 'verified'

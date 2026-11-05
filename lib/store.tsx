@@ -65,6 +65,7 @@ interface State extends PersistedPrefs {
   accountRole: AccountRole | null
   address: string | null
   pickupAddress: string | null
+  businessWebsite: string | null
   addressVisible: boolean
   avatarUrl: string | null
   verificationStatus: 'unverified' | 'pending' | 'verified'
@@ -111,6 +112,7 @@ const initialState: State = {
   accountRole: null,
   address: null,
   pickupAddress: null,
+  businessWebsite: null,
   addressVisible: false,
   avatarUrl: null,
   verificationStatus: 'unverified',
@@ -195,6 +197,7 @@ function reducer(state: State, action: Action): State {
           accountRole: p?.role ?? null,
           address: p?.address ?? null,
           pickupAddress: p?.pickup_address ?? null,
+          businessWebsite: p?.business_website ?? null,
           addressVisible: p?.address_visible ?? false,
           avatarUrl: p?.avatar_url ?? null,
           verificationStatus: p?.verification_status ?? 'unverified',
@@ -293,6 +296,7 @@ interface StoreCtx {
     updateProfile: (body: {
       address?: string
       pickupAddress?: string
+      businessWebsite?: string | null
       addressVisible?: boolean
       avatarUrl?: string
       verificationDocument?: { type: 'nid' | 'passport' | 'tradeLicense'; url: string }

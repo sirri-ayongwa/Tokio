@@ -46,7 +46,7 @@ export const liveQueries = {
     rawSql(`SELECT review_id FROM review_marks WHERE user_id = $1`, [userId]),
   profile: (userId: string) =>
     rawSql(
-      `SELECT user_id, phone, phone_verified, role, address, pickup_address, address_visible,
+      `SELECT user_id, phone, phone_verified, role, address, pickup_address, business_website, address_visible,
               avatar_url, verification_status, nid_url, passport_url, trade_license_url
          FROM profiles WHERE user_id = $1`,
       [userId],
