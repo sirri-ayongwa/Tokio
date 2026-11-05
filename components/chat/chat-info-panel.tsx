@@ -116,7 +116,7 @@ export function ChatInfoPanel() {
             type="button"
             onClick={() =>
               actions
-                .sendMessage({ sender: state.role, kind: 'product' })
+                .sendMessage({ kind: 'product' })
                 .then(() => toast(t('chat.productShared')))
                 .catch((e) => toast.error(t('chat.shareFail'), { description: e.message }))
             }

@@ -16,7 +16,7 @@ const LANG_NAMES = { en: 'English', bn: 'বাংলা' } as const
 export function MessageBubble({ message }: { message: Message }) {
   const { state, user } = useStore()
   const { t } = useLang()
-  const own = message.sender === state.role
+  const own = message.senderUserId ? message.senderUserId === user.id : message.sender === state.role
   const initials = user.name
     .split(/\s+/)
     .map((w) => w[0])

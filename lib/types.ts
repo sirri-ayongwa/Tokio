@@ -8,6 +8,8 @@ export type MessageKind = 'text' | 'product' | 'order' | 'image'
 
 export interface Message {
   id: string
+  conversationId?: string
+  senderUserId?: string
   sender: Role
   kind: MessageKind
   text?: string
@@ -27,8 +29,26 @@ export interface OrderDraft {
   address: string
 }
 
+export interface Conversation {
+  id: string
+  shopper_id: string
+  merchant_id: string
+  shopper_email: string | null
+  merchant_name: string | null
+  merchant_category: string | null
+  last_message: string | null
+  updated_at: string | Date
+}
+
+export interface Merchant {
+  id: string
+  name: string
+  category: string | null
+}
+
 export interface Order extends OrderDraft {
   id: string
+  conversationId?: string
   ref: string
   image: string
   customer: string
@@ -61,6 +81,7 @@ export interface Review {
 // Row shapes returned by live queries (snake_case from Postgres).
 export interface OrderRow {
   id: string
+  conversation_id: string | null
   ref: string
   product: string
   image: string | null
@@ -83,6 +104,8 @@ export interface OrderRow {
 
 export interface MessageRow {
   id: string
+  conversation_id: string | null
+  sender_user_id: string | null
   sender: Role
   kind: MessageKind
   text: string | null

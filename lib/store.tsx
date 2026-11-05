@@ -18,9 +18,11 @@ import { PRODUCT, SHOP } from './constants'
 import { fmtDate, fmtTime } from './format'
 import type {
   AccountRole,
+  Conversation,
   Lang,
   Message,
   MessageRow,
+  Merchant,
   Order,
   OrderDraft,
   OrderRow,
@@ -50,6 +52,9 @@ interface State extends PersistedPrefs {
   openOrderId: string | null
   reviewOrderId: string | null
   messages: Message[]
+  conversations: Conversation[]
+  merchants: Merchant[]
+  activeConversationId: string | null
   orders: Order[]
   reviews: Review[]
   marks: Set<string>
@@ -70,6 +75,8 @@ type Action =
   | { type: 'sync'; kind: 'reviewMarks'; rows: ReviewMarkRow[] }
   | { type: 'sync'; kind: 'profile'; rows: ProfileRow[] }
   | { type: 'synced' }
+  | { type: 'conversationData'; conversations: Conversation[]; merchants: Merchant[]; role: AccountRole }
+  | { type: 'selectConversation'; id: string | null }
   | { type: 'setTab'; tab: Tab }
   | { type: 'openOrder'; id: string | null }
   | { type: 'startReview'; orderId: string | null }
@@ -84,6 +91,9 @@ const initialState: State = {
   openOrderId: null,
   reviewOrderId: null,
   messages: [],
+  conversations: [],
+  merchants: [],
+  activeConversationId: null,
   orders: [],
   reviews: [],
   marks: new Set<string>(),
@@ -103,6 +113,8 @@ const toDate = (d: string | Date) => (d instanceof Date ? d : new Date(d))
 
 const toMessage = (r: MessageRow): Message => ({
   id: r.id,
+  conversationId: r.conversation_id ?? undefined,
+  senderUserId: r.sender_user_id ?? undefined,
   sender: r.sender,
   kind: r.kind,
   text: r.text ?? undefined,
@@ -115,6 +127,7 @@ const toMessage = (r: MessageRow): Message => ({
 
 const toOrder = (r: OrderRow): Order => ({
   id: r.id,
+  conversationId: r.conversation_id ?? undefined,
   ref: r.ref,
   product: r.product,
   image: r.image || PRODUCT.image,
@@ -181,6 +194,20 @@ function reducer(state: State, action: Action): State {
     }
     case 'synced':
       return { ...state, synced: true }
+    case 'conversationData':
+      return {
+        ...state,
+        conversations: action.conversations,
+        merchants: action.merchants,
+        accountRole: action.role,
+        role: action.role === 'merchant' ? 'seller' : 'buyer',
+        activeConversationId:
+          state.activeConversationId && action.conversations.some((c) => c.id === state.activeConversationId)
+            ? state.activeConversationId
+            : action.conversations[0]?.id ?? null,
+      }
+    case 'selectConversation':
+      return { ...state, activeConversationId: action.id }
     case 'setTab':
       return { ...state, tab: action.tab }
     case 'openOrder':
@@ -227,7 +254,6 @@ interface StoreCtx {
   user: SessionUser
   actions: {
     sendMessage: (m: {
-      sender: Role
       kind: Message['kind']
       text?: string
       lang?: Lang
@@ -235,6 +261,7 @@ interface StoreCtx {
       orderId?: string
       imageUrl?: string
     }) => Promise<void>
+    startConversation: (merchantId: string) => Promise<void>
     confirmOrder: (draft: OrderDraft) => Promise<{ orderId: string; ref: string }>
     cancelOrder: (id: string) => Promise<void>
     refreshTracking: (id: string) => Promise<{ advanced: number }>
@@ -303,12 +330,22 @@ export function StoreProvider({
   const actions = useMemo<StoreCtx['actions']>(
     () => ({
       sendMessage: async (m) => {
-        const r = await api('/api/messages', m)
+        if (!state.activeConversationId) throw new Error('Choose a conversation first')
+        const r = await api('/api/messages', { ...m, conversationId: state.activeConversationId })
         await wait('messages', r.txid)
       },
+      startConversation: async (merchantId) => {
+        const r = await api('/api/conversations', { merchantId })
+        const res = await fetch('/api/conversations')
+        const data = await res.json()
+        dispatch({ type: 'conversationData', ...data })
+        dispatch({ type: 'selectConversation', id: r.id as string })
+      },
       confirmOrder: async (draft) => {
+        if (!state.activeConversationId) throw new Error('Choose a conversation first')
         const r = await api('/api/orders', {
           ...draft,
+          conversationId: state.activeConversationId,
           image: PRODUCT.image,
           seller: SHOP.name,
         })
@@ -366,13 +403,23 @@ export function StoreProvider({
         await api('/api/reset')
       },
     }),
-    [wait],
+    [wait, state.activeConversationId],
   )
 
   const ctx = useMemo<StoreCtx>(
     () => ({ state, dispatch, user, actions }),
     [state, user, actions],
   )
+
+  useEffect(() => {
+    fetch('/api/conversations')
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load conversations')
+        return res.json()
+      })
+      .then((data) => dispatch({ type: 'conversationData', ...data }))
+      .catch((error) => toast.error('Chat could not load', { description: error.message }))
+  }, [])
 
   return (
     <RealtimeProvider client={rtClient}>

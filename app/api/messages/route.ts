@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/auth-server'
 import { ensureSchema, sql } from '@/lib/db'
 
 interface MessageInput {
-  sender: 'buyer' | 'seller'
+  conversationId: string
   kind: 'text' | 'product' | 'order' | 'image'
   text?: string
   lang?: string
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const m = (await request.json()) as MessageInput
-  if (!['buyer', 'seller'].includes(m.sender) || !['text', 'product', 'order', 'image'].includes(m.kind)) {
+  if (!m.conversationId || !['text', 'product', 'order', 'image'].includes(m.kind)) {
     return Response.json({ error: 'Invalid message' }, { status: 400 })
   }
   if (m.kind === 'text' && !m.text?.trim()) {
@@ -24,10 +24,16 @@ export async function POST(request: Request) {
   }
 
   await ensureSchema()
+  const [conversation] = await sql`
+    SELECT shopper_id, merchant_id FROM conversations
+     WHERE id = ${m.conversationId} AND ${user.id} IN (shopper_id, merchant_id)`
+  if (!conversation) return Response.json({ error: 'Conversation not found' }, { status: 404 })
+  const sender = conversation.merchant_id === user.id ? 'seller' : 'buyer'
   const [row] = await sql`
-    INSERT INTO messages (user_id, sender, kind, text, lang, translation, order_id, image_url)
-    VALUES (${user.id}, ${m.sender}, ${m.kind}, ${m.text ?? null}, ${m.lang ?? null},
+    INSERT INTO messages (user_id, conversation_id, sender_user_id, sender, kind, text, lang, translation, order_id, image_url)
+    VALUES (${conversation.shopper_id}, ${m.conversationId}, ${user.id}, ${sender}, ${m.kind}, ${m.text ?? null}, ${m.lang ?? null},
             ${m.translation ?? null}, ${m.orderId ?? null}, ${m.imageUrl ?? null})
     RETURNING id, pg_current_xact_id()::text AS txid`
+  await sql`UPDATE conversations SET updated_at = now() WHERE id = ${m.conversationId}`
   return Response.json({ kind: 'committed', txid: row.txid, id: row.id })
 }

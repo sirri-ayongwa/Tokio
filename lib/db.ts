@@ -34,6 +34,17 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address_visible boolean NOT NULL DEFAULT false;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS category text;
 
+CREATE TABLE IF NOT EXISTS conversations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shopper_id text NOT NULL,
+  merchant_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (shopper_id, merchant_id)
+);
+CREATE INDEX IF NOT EXISTS conversations_shopper_idx ON conversations (shopper_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_merchant_idx ON conversations (merchant_id, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id text NOT NULL,
@@ -56,6 +67,9 @@ CREATE TABLE IF NOT EXISTS orders (
   from_chat boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS conversation_id uuid REFERENCES conversations (id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shopper_id text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS merchant_id text;
 CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -70,6 +84,8 @@ CREATE TABLE IF NOT EXISTS messages (
   image_url text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id uuid REFERENCES conversations (id) ON DELETE CASCADE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_user_id text;
 CREATE INDEX IF NOT EXISTS messages_user_idx ON messages (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -107,10 +123,14 @@ CREATE SEQUENCE IF NOT EXISTS orders_ref_seq START 1048;
 let schemaPromise: Promise<unknown> | null = null
 
 export function ensureSchema() {
-  // orders_ref_seq is created last, so its presence means the schema already
-  // ran — one cheap lookup skips ~19 DDL round-trips on cold instances.
+  // Check the newest schema addition so existing deployments receive upgrades.
   // The serverless driver runs one statement per query, so split the DDL.
-  schemaPromise ??= sqlDirect`SELECT to_regclass('public.orders_ref_seq') AS ready`
+  schemaPromise ??= sqlDirect`
+    SELECT to_regclass('public.conversations') IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'conversation_id'
+       ) AS ready`
     .then(([row]) =>
       row?.ready
         ? true

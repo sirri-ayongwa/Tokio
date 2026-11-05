@@ -14,7 +14,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   await ensureSchema()
   const [row] = await sql`
     UPDATE orders SET status = 'cancelled'
-    WHERE id = ${id} AND user_id = ${user.id} AND status = 'active'
+    WHERE id = ${id} AND ${user.id} IN (user_id, shopper_id, merchant_id) AND status = 'active'
     RETURNING id, pg_current_xact_id()::text AS txid`
   if (!row) return Response.json({ kind: 'unchanged' })
   return Response.json({ kind: 'committed', txid: row.txid })

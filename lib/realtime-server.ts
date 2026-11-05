@@ -19,17 +19,21 @@ export function getRealtime() {
   return cached
 }
 
-const ORDER_COLS = `id, ref, product, image, quantity, unit_price, delivery_fee, payment,
+const ORDER_COLS = `id, conversation_id, ref, product, image, quantity, unit_price, delivery_fee, payment,
   address, customer, customer_phone_verified, seller, status, tracking_ref,
   tracking_stage, tracking_times, reviewed, from_chat, created_at`
 
 export const liveQueries = {
   orders: (userId: string) =>
-    rawSql(`SELECT ${ORDER_COLS} FROM orders WHERE user_id = $1 ORDER BY created_at DESC`, [userId]),
+    rawSql(`SELECT ${ORDER_COLS} FROM orders WHERE user_id = $1 OR shopper_id = $1 OR merchant_id = $1 ORDER BY created_at DESC`, [userId]),
   messages: (userId: string) =>
     rawSql(
-      `SELECT id, sender, kind, text, lang, translation, order_id, image_url, created_at
-         FROM messages WHERE user_id = $1 ORDER BY created_at`,
+      `SELECT m.id, m.conversation_id, m.sender_user_id, m.sender, m.kind, m.text,
+              m.lang, m.translation, m.order_id, m.image_url, m.created_at
+         FROM messages m
+         LEFT JOIN conversations c ON c.id = m.conversation_id
+        WHERE m.user_id = $1 OR $1 IN (c.shopper_id, c.merchant_id)
+        ORDER BY m.created_at`,
       [userId],
     ),
   reviews: (_userId: string) =>

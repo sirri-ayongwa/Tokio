@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params
   await ensureSchema()
-  const [own] = await sql`SELECT id FROM orders WHERE id = ${id} AND user_id = ${user.id}`
+  const [own] = await sql`SELECT id FROM orders WHERE id = ${id} AND ${user.id} IN (user_id, shopper_id, merchant_id)`
   if (!own) return Response.json({ error: 'Order not found' }, { status: 404 })
 
   const fnUrl = process.env.NEON_FUNCTION_COURIER_BASE_URL

@@ -4,7 +4,6 @@ import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent 
 import { Loader2, Paperclip, SendHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
-import { SELLER_AUTO_REPLY } from '@/lib/constants'
 import { langOf } from '@/lib/extract-order'
 import { useLang } from '@/lib/i18n'
 
@@ -25,34 +24,16 @@ export function Composer({
   const [text, setText] = useState('')
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const autoReplied = useRef(false)
 
   const send = (value: string) => {
     const body = value.trim()
     if (!body) return
     const lang = langOf(body) === 'bn' ? 'bn' : state.lang
     actions
-      .sendMessage({ sender: state.role, kind: 'text', lang, text: body })
+      .sendMessage({ kind: 'text', lang, text: body })
       .catch((e) => toast.error(t('chat.msgFail'), { description: e.message }))
     setText('')
 
-    const alreadyReplied = autoReplied.current || state.messages.some((m) => m.sender === 'seller')
-    if (state.role === 'buyer' && !alreadyReplied) {
-      autoReplied.current = true
-      setTimeout(() => onSellerTyping(true), 500)
-      setTimeout(() => {
-        onSellerTyping(false)
-        actions
-          .sendMessage({
-            sender: 'seller',
-            kind: 'text',
-            lang: 'bn',
-            text: SELLER_AUTO_REPLY.text,
-            translation: SELLER_AUTO_REPLY.translation,
-          })
-          .catch(() => {})
-      }, 2000)
-    }
   }
 
   const onSubmit = (e: FormEvent) => {
@@ -75,7 +56,7 @@ export function Composer({
     setUploading(true)
     try {
       const url = await actions.uploadImage(file)
-      await actions.sendMessage({ sender: state.role, kind: 'image', imageUrl: url })
+      await actions.sendMessage({ kind: 'image', imageUrl: url })
     } catch (err) {
       toast.error(t('chat.uploadFail'), { description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -126,15 +107,17 @@ export function Composer({
           placeholder={t('chat.msgPlaceholder')}
           className="h-11 min-w-0 flex-1 rounded-full border border-input bg-background px-4 text-[15px] placeholder:text-muted-foreground"
         />
-        <button
-          type="button"
-          onClick={onOpenAi}
-          className="inline-flex h-11 items-center gap-1.5 rounded-full border border-primary/30 bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:border-primary/60"
-        >
-          <Sparkles className="size-4" aria-hidden />
-          <span className="hidden sm:inline">{t('chat.createAi')}</span>
-          <span className="sr-only sm:hidden">{t('chat.createAi')}</span>
-        </button>
+        {state.accountRole === 'shopper' && (
+          <button
+            type="button"
+            onClick={onOpenAi}
+            className="inline-flex h-11 items-center gap-1.5 rounded-full border border-primary/30 bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:border-primary/60"
+          >
+            <Sparkles className="size-4" aria-hidden />
+            <span className="hidden sm:inline">{t('chat.createAi')}</span>
+            <span className="sr-only sm:hidden">{t('chat.createAi')}</span>
+          </button>
+        )}
         <button
           type="submit"
           disabled={!text.trim()}

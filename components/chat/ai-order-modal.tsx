@@ -57,14 +57,14 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
         const res = await fetch('/api/extract-order', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: state.messages }),
+          body: JSON.stringify({ messages: state.messages.filter((message) => message.conversationId === state.activeConversationId) }),
         })
         if (!res.ok) throw new Error()
         const ai = await res.json()
         setDraft(ai)
         setSources(null)
       } catch {
-        const { draft, sources } = extractOrder(state.messages)
+        const { draft, sources } = extractOrder(state.messages.filter((message) => message.conversationId === state.activeConversationId))
         setDraft(draft)
         setSources(sources)
       }

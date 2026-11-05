@@ -1,14 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
-import { BadgeCheck, Info, Languages, Sparkles } from 'lucide-react'
+import { BadgeCheck, Info, Languages, MessageCircle, Sparkles, Store } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { SHOP } from '@/lib/constants'
 import { hasOrderSignals } from '@/lib/extract-order'
 import { useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
-import type { Lang, Role } from '@/lib/types'
+import type { Lang } from '@/lib/types'
 import { Modal } from '@/components/ui/modal'
 import { MessageBubble } from './message-bubble'
 import { Composer } from './composer'
@@ -22,25 +20,28 @@ export function ChatScreen() {
   const [infoOpen, setInfoOpen] = useState(false)
   const [sellerTyping, setSellerTyping] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
-  const hasChatOrder = state.orders.some((o) => o.fromChat)
-  const showAiCard = !hasChatOrder && hasOrderSignals(state.messages)
+  const active = state.conversations.find((c) => c.id === state.activeConversationId) ?? null
+  const messages = state.messages.filter((m) => m.conversationId === state.activeConversationId)
+  const hasChatOrder = state.orders.some((o) => o.fromChat && o.conversationId === state.activeConversationId)
+  const showAiCard = state.accountRole === 'shopper' && !hasChatOrder && hasOrderSignals(messages)
+  const peerName = state.accountRole === 'merchant'
+    ? active?.shopper_email || 'Shopper'
+    : active?.merchant_name || 'Merchant'
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
   }, [state.messages.length, sellerTyping])
 
+  if (!active) return <EmptyChat />
+
   return (
     <div className="flex h-full">
-      <section aria-label="Conversation with Golden Bracelet Shop" className="flex min-w-0 flex-1 flex-col">
+      <section aria-label={`Conversation with ${peerName}`} className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
           <span className="relative shrink-0">
-            <Image
-              src={SHOP.logo}
-              alt=""
-              width={44}
-              height={44}
-              className="size-11 rounded-full border object-cover"
-            />
+            <span className="grid size-11 place-items-center rounded-full border bg-accent font-semibold text-primary">
+              {peerName.slice(0, 1).toUpperCase()}
+            </span>
             <span
               className="absolute right-0 bottom-0 size-3 rounded-full border-2 border-card bg-emerald-500"
               aria-hidden
@@ -48,8 +49,8 @@ export function ChatScreen() {
           </span>
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-1.5 truncate font-semibold">
-              {SHOP.name}
-              <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified seller" />
+              {peerName}
+              {state.accountRole === 'shopper' && <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified seller" />}
             </h1>
             <p className="text-xs text-muted-foreground">
               <span className="font-medium text-primary">{t('chat.online')}</span> · Verified seller · {t('chat.responseTime')}
@@ -58,13 +59,14 @@ export function ChatScreen() {
           <button
             type="button"
             onClick={() => setInfoOpen(true)}
-            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground xl:hidden"
+            className={cn('rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground xl:hidden', state.accountRole === 'merchant' && 'hidden')}
           >
             <Info className="size-5" aria-hidden />
             <span className="sr-only">{t('chat.about')}</span>
           </button>
         </header>
 
+        <ConversationBar />
         <ChatToolbar />
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-background">
@@ -75,7 +77,7 @@ export function ChatScreen() {
               </span>
             </p>
             <ol className="space-y-4" aria-label="Messages" aria-live="polite">
-              {state.messages.map((m) => (
+              {messages.map((m) => (
                 <MessageBubble key={m.id} message={m} />
               ))}
               {sellerTyping && (
@@ -119,14 +121,67 @@ export function ChatScreen() {
         <Composer onOpenAi={() => setAiOpen(true)} onSellerTyping={setSellerTyping} />
       </section>
 
-      <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-5 xl:block" aria-label="Shop details">
+      <aside className={cn('hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-5 xl:block', state.accountRole === 'merchant' && 'xl:hidden')} aria-label="Shop details">
         <ChatInfoPanel />
       </aside>
 
-      <Modal open={infoOpen} onClose={() => setInfoOpen(false)} title={t('chat.about')}>
+      <Modal open={state.accountRole === 'shopper' && infoOpen} onClose={() => setInfoOpen(false)} title={t('chat.about')}>
         <ChatInfoPanel />
       </Modal>
       <AiOrderModal open={aiOpen} onClose={() => setAiOpen(false)} />
+    </div>
+  )
+}
+
+function EmptyChat() {
+  const { state, actions } = useStore()
+  const merchant = state.accountRole === 'merchant'
+  return (
+    <div className="grid h-full place-items-center overflow-y-auto p-6">
+      <div className="w-full max-w-md text-center">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent text-primary">
+          {merchant ? <MessageCircle className="size-6" /> : <Store className="size-6" />}
+        </span>
+        <h1 className="mt-4 text-xl font-semibold">{merchant ? 'No shopper conversations yet' : 'Start a conversation'}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {merchant ? 'New shopper messages will appear here.' : 'Choose a registered merchant to begin chatting.'}
+        </p>
+        {!merchant && (
+          <div className="mt-5 space-y-2 text-left">
+            {state.merchants.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">No merchant accounts are available yet.</p>
+            ) : state.merchants.map((item) => (
+              <button key={item.id} type="button" onClick={() => actions.startConversation(item.id)} className="flex w-full items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50">
+                <span className="grid size-10 place-items-center rounded-full bg-accent font-semibold text-primary">{item.name.slice(0, 1).toUpperCase()}</span>
+                <span><span className="block font-medium">{item.name}</span><span className="text-xs text-muted-foreground">{item.category || 'Merchant'}</span></span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ConversationBar() {
+  const { state, dispatch, actions } = useStore()
+  const unusedMerchants = state.merchants.filter((merchant) => !state.conversations.some((conversation) => conversation.merchant_id === merchant.id))
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto border-b bg-card/80 px-3 py-2">
+      {state.conversations.map((conversation) => {
+        const label = state.accountRole === 'merchant' ? conversation.shopper_email || 'Shopper' : conversation.merchant_name || 'Merchant'
+        return (
+          <button key={conversation.id} type="button" onClick={() => dispatch({ type: 'selectConversation', id: conversation.id })}
+            className={cn('shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors', state.activeConversationId === conversation.id ? 'border-primary bg-accent text-primary' : 'bg-background text-muted-foreground hover:text-foreground')}>
+            {label}
+          </button>
+        )
+      })}
+      {unusedMerchants.map((merchant) => (
+        <button key={merchant.id} type="button" onClick={() => actions.startConversation(merchant.id)} className="shrink-0 rounded-full border border-dashed px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary">
+          + {merchant.name}
+        </button>
+      ))}
     </div>
   )
 }
@@ -170,9 +225,9 @@ function ChatToolbar() {
 
   return (
     <div className="flex items-center gap-x-4 gap-y-2 overflow-x-auto border-b bg-card/60 px-4 py-2 text-xs">
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="hidden shrink-0 items-center gap-2">
         <span className="text-muted-foreground">{t('chat.viewAs')}</span>
-        <Segmented<Role>
+        <Segmented<'buyer' | 'seller'>
           label={t('chat.viewAs')}
           value={state.role}
           onChange={(role) => dispatch({ type: 'setRole', role })}
