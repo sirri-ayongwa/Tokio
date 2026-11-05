@@ -257,16 +257,16 @@ export function StoreProvider({
   user,
   children,
   initialRole = 'buyer',
+  realtimeUrl,
 }: {
   user: SessionUser
   children: ReactNode
   initialRole?: Role
+  realtimeUrl: string
 }) {
   const [state, dispatch] = useReducer(reducer, { ...initialState, role: initialRole })
   const liveUtils = useRef<Partial<Record<LiveKind, LiveUtils>>>({})
-  const [rtClient] = useState(() =>
-    createRealtimeClient({ url: process.env.NEXT_PUBLIC_NEON_REALTIME_URL! }),
-  )
+  const [rtClient] = useState(() => createRealtimeClient({ url: realtimeUrl }))
   const prefsLoaded = useRef(false)
 
   // Load UI preferences (language/role/translation toggle) from local storage.
