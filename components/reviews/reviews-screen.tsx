@@ -5,7 +5,6 @@ import Image from 'next/image'
 import { BadgeCheck, Lock, PenLine, ThumbsUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
-import { PRODUCT, SHOP } from '@/lib/constants'
 import { formatTaka } from '@/lib/format'
 import { useLang, interpolate } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
@@ -25,6 +24,8 @@ export function ReviewsScreen() {
 
   const eligible = state.orders.find((o) => o.fromChat && o.status === 'completed' && !o.reviewed)
   const pendingChatOrder = state.orders.find((o) => o.fromChat && o.status === 'active')
+  const purchasedOrder = state.orders.find((o) => o.status === 'completed')
+  const reviewedChatOrder = state.orders.find((o) => o.fromChat && o.reviewed)
   const reviewOrder = state.orders.find((o) => o.id === state.reviewOrderId) ?? null
 
   const startReview = () => {
@@ -62,18 +63,27 @@ export function ReviewsScreen() {
 
         <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
           <div className="space-y-4 lg:sticky lg:top-0 lg:self-start">
-            <section aria-labelledby="product-h" className="flex gap-3 rounded-2xl border bg-card p-3">
-              <Image src={PRODUCT.image} alt={PRODUCT.name} width={64} height={64} className="size-16 rounded-xl object-cover" />
-              <div>
-                <h2 id="product-h" className="font-medium">
-                  {PRODUCT.name}
-                </h2>
-                <p className="text-sm text-muted-foreground">{SHOP.name}</p>
-                <p className="text-sm font-semibold text-primary">{formatTaka(PRODUCT.price)}</p>
-              </div>
-            </section>
+            {purchasedOrder && (
+              <section aria-labelledby="product-h" className="flex gap-3 rounded-2xl border bg-card p-3">
+                <Image
+                  src={purchasedOrder.image}
+                  alt={purchasedOrder.product}
+                  width={64}
+                  height={64}
+                  unoptimized={purchasedOrder.image.startsWith('data:')}
+                  className="size-16 rounded-xl object-cover"
+                />
+                <div>
+                  <h2 id="product-h" className="font-medium">
+                    {purchasedOrder.product}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{purchasedOrder.seller}</p>
+                  <p className="text-sm font-semibold text-primary">{formatTaka(purchasedOrder.unitPrice)}</p>
+                </div>
+              </section>
+            )}
 
-            <section aria-labelledby="summary-h" className="rounded-2xl border bg-card p-5">
+            {reviews.length > 0 && <section aria-labelledby="summary-h" className="rounded-2xl border bg-card p-5">
               <h2 id="summary-h" className="sr-only">
                 Rating summary
               </h2>
@@ -98,16 +108,14 @@ export function ReviewsScreen() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </section>}
 
-            {state.accountRole !== 'merchant' && !eligible && (
+            {state.accountRole !== 'merchant' && !eligible && (pendingChatOrder || reviewedChatOrder) && (
               <p className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                 <Lock className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden />
                 {pendingChatOrder
                   ? interpolate(t('rv.pending'), { ref: pendingChatOrder.ref })
-                  : state.orders.some((o) => o.fromChat && o.reviewed)
-                    ? t('rv.thanks')
-                    : t('rv.placeFirst')}
+                  : t('rv.thanks')}
               </p>
             )}
           </div>
