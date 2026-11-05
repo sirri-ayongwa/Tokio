@@ -45,11 +45,17 @@ export async function GET() {
 
   const merchants = role === 'shopper'
     ? await sql`
-        SELECT user_id AS id, business_name AS name, category, avatar_url,
-               (verification_status = 'verified') AS verified
-          FROM profiles
-         WHERE role = 'merchant' AND user_id <> ${user.id} AND business_name IS NOT NULL
-         ORDER BY business_name`
+        SELECT id, name, category, avatar_url, verified
+          FROM (
+            SELECT DISTINCT ON (lower(trim(business_name)))
+                   user_id AS id, business_name AS name, category, avatar_url,
+                   (verification_status = 'verified') AS verified, created_at
+              FROM profiles
+             WHERE role = 'merchant' AND user_id <> ${user.id}
+               AND NULLIF(trim(business_name), '') IS NOT NULL
+             ORDER BY lower(trim(business_name)), created_at DESC
+          ) merchant_list
+         ORDER BY lower(name)`
     : []
 
   return Response.json({ role, conversations, merchants })
