@@ -15,21 +15,19 @@ export function PhoneVerifyButton({ className, size = 'sm' }: { className?: stri
   const { state } = useStore()
   const [open, setOpen] = useState(false)
 
-  if (state.phoneVerified) {
-    return (
-      <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium text-primary', className)}>
-        <CheckCircle2 className="size-4" aria-hidden />
-        Phone verified
-      </span>
-    )
-  }
-
   return (
     <>
-      <Button type="button" variant="outline" size={size} className={className} onClick={() => setOpen(true)}>
-        <Smartphone aria-hidden />
-        Verify phone number
-      </Button>
+      {state.phoneVerified ? (
+        <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium text-primary', className)}>
+          <CheckCircle2 className="size-4" aria-hidden />
+          Phone verified
+        </span>
+      ) : (
+        <Button type="button" variant="outline" size={size} className={className} onClick={() => setOpen(true)}>
+          <Smartphone aria-hidden />
+          Verify phone number
+        </Button>
+      )}
       <PhoneVerifyModal open={open} onClose={() => setOpen(false)} />
     </>
   )

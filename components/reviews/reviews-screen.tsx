@@ -101,7 +101,9 @@ export function ReviewsScreen() {
                 <Lock className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden />
                 {pendingChatOrder
                   ? `Your order ${pendingChatOrder.ref} is on its way. You can review it once it's delivered.`
-                  : 'Place an order from chat and receive it to leave a verified review.'}
+                  : state.orders.some((o) => o.fromChat && o.reviewed)
+                    ? 'Thanks for reviewing! Your next delivered order can be reviewed too.'
+                    : 'Place an order from chat and receive it to leave a verified review.'}
               </p>
             )}
           </div>

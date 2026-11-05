@@ -110,7 +110,7 @@ function ProductContent() {
         <p className="truncate text-sm font-medium">{PRODUCT.name}</p>
         <p className="text-sm font-semibold text-primary">{formatTaka(PRODUCT.price)}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {PRODUCT.stock} · ★ {PRODUCT.rating}
+          {PRODUCT.stock} · Shared by buyer
         </p>
       </div>
     </div>
