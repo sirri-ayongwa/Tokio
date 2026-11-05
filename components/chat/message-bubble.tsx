@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { CheckCheck, Languages, PackageCheck, Truck } from 'lucide-react'
+import { Check, CheckCheck, Languages, PackageCheck, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
@@ -17,6 +17,8 @@ export function MessageBubble({ message }: { message: Message }) {
   const { t } = useLang()
   const own = message.senderUserId ? message.senderUserId === user.id : message.sender === state.role
   const conversation = state.conversations.find((item) => item.id === message.conversationId)
+  const recipientReadAt = message.sender === 'buyer' ? conversation?.merchant_read_at : conversation?.shopper_read_at
+  const read = !!recipientReadAt && new Date(recipientReadAt).getTime() >= new Date(message.createdAt).getTime()
   const initials = user.name
     .split(/\s+/)
     .map((w) => w[0])
@@ -47,7 +49,9 @@ export function MessageBubble({ message }: { message: Message }) {
             {message.sender === 'seller' ? t('chat.seller') : t('chat.buyer')}, sent at{' '}
           </span>
           {message.time}
-          {own && <CheckCheck className="size-3.5 text-primary" aria-label="Sent" />}
+          {own && (read
+            ? <CheckCheck className="size-3.5 text-primary" aria-label="Read" />
+            : <Check className="size-3.5 text-muted-foreground" aria-label="Sent" />)}
         </span>
       </div>
     </li>

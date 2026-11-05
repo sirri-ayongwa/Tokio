@@ -32,6 +32,11 @@ export function ChatScreen() {
     endRef.current?.scrollIntoView({ block: 'end' })
   }, [state.messages.length, sellerTyping])
 
+  useEffect(() => {
+    if (!state.activeConversationId) return
+    fetch(`/api/conversations/${state.activeConversationId}/read`, { method: 'POST' }).catch(() => {})
+  }, [state.activeConversationId, messages.length])
+
   if (!active) return <EmptyChat />
 
   return (

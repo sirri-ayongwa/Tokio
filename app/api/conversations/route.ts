@@ -10,6 +10,7 @@ export async function GET() {
   const role = profile?.role === 'merchant' ? 'merchant' : 'shopper'
   const conversations = await sql`
     SELECT c.id, c.shopper_id, c.merchant_id, c.updated_at,
+           c.shopper_read_at, c.merchant_read_at,
            sp.email AS shopper_email,
            (sp.verification_status = 'verified') AS shopper_verified,
            COALESCE(mp.business_name, mp.email) AS merchant_name,

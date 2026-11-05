@@ -63,8 +63,12 @@ CREATE TABLE IF NOT EXISTS conversations (
   merchant_id text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  shopper_read_at timestamptz,
+  merchant_read_at timestamptz,
   UNIQUE (shopper_id, merchant_id)
 );
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS shopper_read_at timestamptz;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS merchant_read_at timestamptz;
 CREATE INDEX IF NOT EXISTS conversations_shopper_idx ON conversations (shopper_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS conversations_merchant_idx ON conversations (merchant_id, updated_at DESC);
 
@@ -155,6 +159,9 @@ export function ensureSchema() {
        AND EXISTS (
          SELECT 1 FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'product_id'
+       ) AND EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'merchant_read_at'
        ) AS ready`
     .then(([row]) =>
       row?.ready

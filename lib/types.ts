@@ -19,6 +19,7 @@ export interface Message {
   imageUrl?: string
   productId?: string
   time: string
+  createdAt: string | Date
 }
 
 export interface OrderDraft {
@@ -43,6 +44,8 @@ export interface Conversation {
   merchant_created_at: string | Date | null
   completed_orders: number
   response_seconds: number | null
+  shopper_read_at: string | Date | null
+  merchant_read_at: string | Date | null
   last_message: string | null
   updated_at: string | Date
 }

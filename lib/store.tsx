@@ -138,6 +138,7 @@ const toMessage = (r: MessageRow): Message => ({
   imageUrl: r.image_url ?? undefined,
   productId: r.product_id ?? undefined,
   time: fmtTime(toDate(r.created_at)),
+  createdAt: r.created_at,
 })
 
 const toOrder = (r: OrderRow): Order => ({
@@ -444,13 +445,17 @@ export function StoreProvider({
   )
 
   useEffect(() => {
-    fetch('/api/conversations')
+    let cancelled = false
+    const load = () => fetch('/api/conversations')
       .then((res) => {
         if (!res.ok) throw new Error('Could not load conversations')
         return res.json()
       })
-      .then((data) => dispatch({ type: 'conversationData', ...data }))
-      .catch((error) => toast.error('Chat could not load', { description: error.message }))
+      .then((data) => { if (!cancelled) dispatch({ type: 'conversationData', ...data }) })
+      .catch(() => {})
+    load()
+    const interval = window.setInterval(load, 4000)
+    return () => { cancelled = true; window.clearInterval(interval) }
   }, [])
 
   useEffect(() => {
