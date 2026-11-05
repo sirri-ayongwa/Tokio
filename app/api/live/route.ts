@@ -1,6 +1,6 @@
 import { requireUser } from '@/lib/auth-server'
 import { ensureSchema } from '@/lib/db'
-import { liveQueries, realtime, type LiveKind } from '@/lib/realtime-server'
+import { getRealtime, liveQueries, type LiveKind } from '@/lib/realtime-server'
 
 const KINDS = new Set<LiveKind>(['orders', 'messages', 'reviews', 'reviewMarks', 'profile'])
 
@@ -13,6 +13,6 @@ export async function POST(request: Request) {
 
   await ensureSchema()
   const query = liveQueries[kind](user.id)
-  const sealed = await realtime.seal({ query })
+  const sealed = await getRealtime().seal({ query })
   return Response.json(sealed)
 }

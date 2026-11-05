@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/app-shell'
-import { auth } from '@/lib/auth-server'
+import { getAuth } from '@/lib/auth-server'
 import { ensureSchema, sqlDirect } from '@/lib/db'
 import { StoreProvider } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-  const { data: session } = await auth.getSession()
+  const { data: session } = await getAuth().getSession()
   const user = session?.user
 
   if (!user) redirect('/auth')

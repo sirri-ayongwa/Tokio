@@ -3,10 +3,21 @@ import type { LiveKind } from './types'
 
 export type { LiveKind }
 
-export const realtime = createRealtime({
-  secret: process.env.NEON_REALTIME_SECRET!,
-  db: new URL(process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL!).pathname.slice(1),
-})
+let cached: ReturnType<typeof createRealtime> | null = null
+
+export function getRealtime() {
+  if (!cached) {
+    const conn = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL
+    if (!process.env.NEON_REALTIME_SECRET || !conn) {
+      throw new Error('Missing NEON_REALTIME_SECRET or DATABASE_URL')
+    }
+    cached = createRealtime({
+      secret: process.env.NEON_REALTIME_SECRET,
+      db: new URL(conn).pathname.slice(1),
+    })
+  }
+  return cached
+}
 
 const ORDER_COLS = `id, ref, product, image, quantity, unit_price, delivery_fee, payment,
   address, customer, customer_phone_verified, seller, status, tracking_ref,
