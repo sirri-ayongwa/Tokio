@@ -1,15 +1,18 @@
 'use client'
 
 import Image from 'next/image'
-import { BadgeCheck, Clock, MapPin, Package, ShieldCheck, Star } from 'lucide-react'
+import { BadgeCheck, Clock, MapPin, Package, Share2, ShieldCheck, Star } from 'lucide-react'
+import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
-import { PRODUCT, SHOP } from '@/lib/mock-data'
+import { PRODUCT, SHOP } from '@/lib/constants'
 import { formatTaka, orderTotal } from '@/lib/format'
+import { useLang } from '@/lib/i18n'
 import { PhoneBadge, StatusPill, VerifiedSellerBadge } from '@/components/shared/badges'
 import { PhoneVerifyButton } from '@/components/trust/phone-verify'
 
 export function ChatInfoPanel() {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, actions } = useStore()
+  const { t } = useLang()
   const chatOrders = state.orders.filter((o) => o.fromChat)
   const avg = state.reviews.reduce((s, r) => s + r.rating, 0) / Math.max(1, state.reviews.length)
 
@@ -32,18 +35,18 @@ export function ChatInfoPanel() {
         <VerifiedSellerBadge className="mt-2" />
         <dl className="mt-4 grid grid-cols-3 divide-x rounded-xl border bg-background py-2.5 text-center">
           <div>
-            <dt className="text-[11px] text-muted-foreground">Rating</dt>
+            <dt className="text-[11px] text-muted-foreground">{t('info.rating')}</dt>
             <dd className="inline-flex items-center gap-0.5 text-sm font-semibold">
               <Star className="size-3.5 fill-gold text-gold" aria-hidden />
               {avg.toFixed(1)}
             </dd>
           </div>
           <div>
-            <dt className="text-[11px] text-muted-foreground">Orders</dt>
+            <dt className="text-[11px] text-muted-foreground">{t('info.orders')}</dt>
             <dd className="text-sm font-semibold">{SHOP.completedOrders.toLocaleString('en-IN')}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-muted-foreground">Since</dt>
+            <dt className="text-[11px] text-muted-foreground">{t('info.since')}</dt>
             <dd className="text-sm font-semibold">{SHOP.memberSince}</dd>
           </div>
         </dl>
@@ -54,7 +57,7 @@ export function ChatInfoPanel() {
           </li>
           <li className="flex items-center gap-2">
             <Clock className="size-4 shrink-0" aria-hidden />
-            {SHOP.responseTime}
+            {t('chat.responseTime')}
           </li>
         </ul>
       </section>
@@ -62,19 +65,19 @@ export function ChatInfoPanel() {
       <section aria-labelledby="trust-heading" className="rounded-xl border bg-background p-4">
         <h3 id="trust-heading" className="flex items-center gap-2 text-sm font-semibold">
           <ShieldCheck className="size-4 text-primary" aria-hidden />
-          Trust &amp; verification
+          {t('chat.trust')}
         </h3>
         <ul className="mt-3 space-y-3 text-sm">
           <li className="flex items-start gap-2.5">
             <BadgeCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
             <span>
-              <span className="font-medium">Seller identity verified</span>
-              <span className="block text-xs text-muted-foreground">Trade licence and NID checked (demo)</span>
+              <span className="font-medium">{t('chat.identityVerified')}</span>
+              <span className="block text-xs text-muted-foreground">{t('chat.identityDesc')}</span>
             </span>
           </li>
           <li className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">Your phone</span>
+              <span className="font-medium">{t('info.yourPhone')}</span>
               <PhoneBadge verified={state.phoneVerified} />
             </div>
             <PhoneVerifyButton className="w-full" />
@@ -94,22 +97,36 @@ export function ChatInfoPanel() {
             height={56}
             className="size-14 rounded-lg object-cover"
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">{PRODUCT.name}</p>
             <p className="text-sm font-semibold text-primary">{formatTaka(PRODUCT.price)}</p>
             <p className="text-xs text-muted-foreground">{PRODUCT.stock}</p>
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              actions
+                .sendMessage({ sender: state.role, kind: 'product' })
+                .then(() => toast(t('chat.productShared')))
+                .catch((e) => toast.error(t('chat.shareFail'), { description: e.message }))
+            }
+            title={t('chat.shareProduct')}
+            className="grid size-9 shrink-0 place-items-center self-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Share2 className="size-4" aria-hidden />
+            <span className="sr-only">{t('chat.shareProduct')}</span>
+          </button>
         </div>
       </section>
 
       <section aria-labelledby="chat-orders-heading">
         <h3 id="chat-orders-heading" className="mb-2 flex items-center gap-2 text-sm font-semibold">
           <Package className="size-4 text-muted-foreground" aria-hidden />
-          Orders from this chat
+          {t('info.ordersFromChat')}
         </h3>
         {chatOrders.length === 0 ? (
           <p className="rounded-xl border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
-            No orders yet. Use the AI assistant to turn this chat into an order.
+            {t('info.noOrders')}
           </p>
         ) : (
           <ul className="space-y-2">

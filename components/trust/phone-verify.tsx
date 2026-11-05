@@ -1,18 +1,20 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CheckCircle2, Loader2, ShieldCheck, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { useStore } from '@/lib/store'
-import { BUYER, DEMO_OTP } from '@/lib/mock-data'
+import { useLang, interpolate } from '@/lib/i18n'
+import { sendOtp, verifyOtp } from '@/lib/otp-client'
 import { cn } from '@/lib/utils'
 
 type Step = 'phone' | 'code' | 'done'
 
 export function PhoneVerifyButton({ className, size = 'sm' }: { className?: string; size?: 'sm' | 'default' }) {
   const { state } = useStore()
+  const { t } = useLang()
   const [open, setOpen] = useState(false)
 
   return (
@@ -20,12 +22,12 @@ export function PhoneVerifyButton({ className, size = 'sm' }: { className?: stri
       {state.phoneVerified ? (
         <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium text-primary', className)}>
           <CheckCircle2 className="size-4" aria-hidden />
-          Phone verified
+          {t('phone.verified')}
         </span>
       ) : (
         <Button type="button" variant="outline" size={size} className={className} onClick={() => setOpen(true)}>
           <Smartphone aria-hidden />
-          Verify phone number
+          {t('phone.verify')}
         </Button>
       )}
       <PhoneVerifyModal open={open} onClose={() => setOpen(false)} />
@@ -34,12 +36,20 @@ export function PhoneVerifyButton({ className, size = 'sm' }: { className?: stri
 }
 
 function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { dispatch } = useStore()
+  const { state, actions } = useStore()
+  const { t } = useLang()
   const [step, setStep] = useState<Step>('phone')
-  const [phone, setPhone] = useState(BUYER.phone)
+  const [phone, setPhone] = useState(state.phone ?? '+880 ')
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+
+  useEffect(() => {
+    if (!cooldown) return
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
 
   const close = () => {
     onClose()
@@ -50,49 +60,67 @@ function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => voi
     }, 200)
   }
 
-  const sendCode = (e: FormEvent) => {
-    e.preventDefault()
+  const doSend = async () => {
     const digits = phone.replace(/\D/g, '')
     if (digits.length < 11) {
-      setError('Enter a valid Bangladeshi mobile number, e.g. +880 1712-345678.')
+      setError(t('phone.invalid'))
       return
     }
     setError(null)
     setBusy(true)
-    setTimeout(() => {
-      setBusy(false)
+    try {
+      const { devCode } = await sendOtp(phone)
       setStep('code')
-    }, 700)
+      setCode('')
+      setCooldown(30)
+      if (devCode) {
+        toast(interpolate(t('phone.smsTo'), { phone }), {
+          description: `Your Tokio verification code is ${devCode}`,
+          duration: 30_000,
+        })
+      } else {
+        toast(interpolate(t('phone.smsTo'), { phone }))
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('phone.fail'))
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const verify = (e: FormEvent) => {
+  const sendCode = (e: FormEvent) => {
     e.preventDefault()
-    if (code !== DEMO_OTP) {
-      setError('That code doesn’t match. Use the demo code shown below.')
-      return
-    }
+    doSend()
+  }
+
+  const verify = async (e: FormEvent) => {
+    e.preventDefault()
     setError(null)
     setBusy(true)
-    setTimeout(() => {
-      setBusy(false)
+    try {
+      await verifyOtp(phone, code)
+      await actions.verifyPhone(phone)
       setStep('done')
-      dispatch({ type: 'verifyPhone' })
-      toast.success('Phone verified', { description: 'Sellers will now see a trusted-buyer badge.' })
-    }, 600)
+      toast.success(t('phone.done'), { description: t('phone.toastDesc') })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('phone.fail'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <Modal
       open={open}
       onClose={close}
-      title="Verify your phone number"
-      description="Verified buyers help sellers avoid fake orders. Simulated — no SMS is sent."
+      title={t('phone.title')}
+      description={t('phone.desc')}
     >
       {step === 'phone' && (
         <form onSubmit={sendCode} className="space-y-4" noValidate>
           <div className="space-y-1.5">
             <label htmlFor="otp-phone" className="text-sm font-medium">
-              Mobile number
+              {t('phone.mobile')}
             </label>
             <input
               id="otp-phone"
@@ -103,6 +131,7 @@ function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => voi
               onChange={(e) => setPhone(e.target.value)}
               aria-invalid={!!error}
               aria-describedby={error ? 'otp-phone-error' : undefined}
+              placeholder="+880 1712-345678"
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
             />
             {error && (
@@ -113,7 +142,7 @@ function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="animate-spin" aria-hidden />}
-            Send verification code
+            {t('phone.sendCode')}
           </Button>
         </form>
       )}
@@ -121,39 +150,39 @@ function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => voi
       {step === 'code' && (
         <form onSubmit={verify} className="space-y-4" noValidate>
           <p className="text-sm text-muted-foreground">
-            We sent a 6-digit code to <span className="font-medium text-foreground">{phone}</span>.
+            {t('phone.codeSent')}{' '}
+            <span className="font-medium text-foreground">{phone}</span>.
           </p>
           <div className="space-y-1.5">
             <label htmlFor="otp-code" className="text-sm font-medium">
-              Verification code
+              {t('phone.code')}
             </label>
             <input
               id="otp-code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={4}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, ''))
+                setError(null)
+              }}
               aria-invalid={!!error}
               aria-describedby="otp-code-hint"
               className="h-12 w-full rounded-lg border border-input bg-background px-3 text-center font-mono text-xl tracking-[0.5em]"
               autoFocus
             />
             <p id="otp-code-hint" className={cn('text-sm', error ? 'text-destructive' : 'text-muted-foreground')}>
-              {error ?? (
-                <>
-                  Demo code: <span className="font-mono font-semibold text-foreground">{DEMO_OTP}</span>
-                </>
-              )}
+              {error ?? t('phone.enterCode')}
             </p>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setCode(DEMO_OTP)}>
-              Autofill demo code
+            <Button type="button" variant="outline" onClick={doSend} disabled={busy || cooldown > 0}>
+              {cooldown > 0 ? `${t('phone.resendIn')} ${cooldown}s` : t('phone.resend')}
             </Button>
-            <Button type="submit" className="flex-1" disabled={busy || code.length !== 6}>
+            <Button type="submit" className="flex-1" disabled={busy || code.length !== 4}>
               {busy && <Loader2 className="animate-spin" aria-hidden />}
-              Verify
+              {t('phone.verifyBtn')}
             </Button>
           </div>
         </form>
@@ -165,11 +194,13 @@ function PhoneVerifyModal({ open, onClose }: { open: boolean; onClose: () => voi
             <ShieldCheck className="size-7" aria-hidden />
           </span>
           <div>
-            <p className="font-semibold">Phone verified</p>
-            <p className="text-sm text-muted-foreground">{phone} is now linked to your OrderBridge profile.</p>
+            <p className="font-semibold">{t('phone.done')}</p>
+            <p className="text-sm text-muted-foreground">
+              {interpolate(t('phone.doneDesc'), { phone })}
+            </p>
           </div>
           <Button type="button" onClick={close} className="mt-2">
-            Done
+            {t('phone.doneBtn')}
           </Button>
         </div>
       )}

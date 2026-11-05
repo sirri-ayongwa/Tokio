@@ -4,39 +4,38 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { CheckCircle2, ChevronRight, Clock3, Inbox, Package, Sparkles, XCircle } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { TRACKING_STAGES } from '@/lib/mock-data'
 import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
+import { useLang, interpolate } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Order, OrderStatus } from '@/lib/types'
 import { StatusPill } from '@/components/shared/badges'
 
 type Filter = 'all' | OrderStatus
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All orders' },
-  { id: 'active', label: 'Active' },
-  { id: 'completed', label: 'Completed' },
-  { id: 'cancelled', label: 'Cancelled' },
+const FILTERS: { id: Filter; key: string }[] = [
+  { id: 'all', key: 'orders.allOrders' },
+  { id: 'active', key: 'orders.active' },
+  { id: 'completed', key: 'orders.completed' },
+  { id: 'cancelled', key: 'orders.cancelled' },
 ]
-
-function statusLabel(o: Order) {
-  if (o.status === 'cancelled') return 'Cancelled'
-  return TRACKING_STAGES[o.trackingStage].title
-}
 
 export function OrdersScreen() {
   const { state, dispatch } = useStore()
+  const { t } = useLang()
   const [filter, setFilter] = useState<Filter>('all')
   const orders = state.orders
   const count = (s: OrderStatus) => orders.filter((o) => o.status === s).length
   const visible = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
   const open = (id: string) => dispatch({ type: 'openOrder', id })
 
+  const statusLabel = (o: Order) =>
+    o.status === 'cancelled' ? t('orders.statusCancelled') : t(`track.stage${o.trackingStage + 1}`)
+
   const stats = [
-    { label: 'Total orders', value: orders.length, icon: Package, tone: 'bg-muted text-foreground' },
-    { label: 'Active', value: count('active'), icon: Clock3, tone: 'bg-sky-50 text-sky-700' },
-    { label: 'Completed', value: count('completed'), icon: CheckCircle2, tone: 'bg-accent text-primary' },
-    { label: 'Cancelled', value: count('cancelled'), icon: XCircle, tone: 'bg-red-50 text-red-600' },
+    { label: t('orders.total'), value: orders.length, icon: Package, tone: 'bg-muted text-foreground' },
+    { label: t('orders.active'), value: count('active'), icon: Clock3, tone: 'bg-sky-500/15 text-sky-400' },
+    { label: t('orders.completed'), value: count('completed'), icon: CheckCircle2, tone: 'bg-accent text-primary' },
+    { label: t('orders.cancelled'), value: count('cancelled'), icon: XCircle, tone: 'bg-red-500/15 text-red-400' },
   ]
 
   return (
@@ -44,12 +43,16 @@ export function OrdersScreen() {
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
-            <p className="text-sm text-muted-foreground">Every order confirmed from chat, in one place.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('orders.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('orders.sub')}</p>
           </div>
-          <p className="text-xs text-muted-foreground">Revenue (completed): {formatTaka(
-            orders.filter((o) => o.status === 'completed').reduce((s, o) => s + orderTotal(o), 0),
-          )}</p>
+          <p className="text-xs text-muted-foreground">
+            {interpolate(t('orders.revenue'), {
+              total: formatTaka(
+                orders.filter((o) => o.status === 'completed').reduce((s, o) => s + orderTotal(o), 0),
+              ),
+            })}
+          </p>
         </header>
 
         <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -69,7 +72,7 @@ export function OrdersScreen() {
         <section aria-labelledby="order-list-h" className="rounded-2xl border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <h2 id="order-list-h" className="font-semibold">
-              Order list
+              {t('orders.list')}
             </h2>
             <div role="tablist" aria-label="Filter orders" className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-0.5">
               {FILTERS.map((f) => (
@@ -84,7 +87,7 @@ export function OrdersScreen() {
                     filter === f.id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {f.label}
+                  {t(f.key)}
                   <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">
                     {f.id === 'all' ? orders.length : count(f.id)}
                   </span>
@@ -99,15 +102,17 @@ export function OrdersScreen() {
                 <Inbox className="size-5 text-muted-foreground" aria-hidden />
               </span>
               <div>
-                <p className="font-medium">No {filter === 'all' ? '' : filter} orders yet</p>
-                <p className="text-sm text-muted-foreground">Orders created from chat will appear here.</p>
+                <p className="font-medium">
+                  {interpolate(t('orders.emptyTitle'), { filter: filter === 'all' ? '' : t(`orders.${filter}`) })}
+                </p>
+                <p className="text-sm text-muted-foreground">{t('orders.emptyDesc')}</p>
               </div>
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'setTab', tab: 'chat' })}
                 className="rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground"
               >
-                Go to chat
+                {t('orders.goChat')}
               </button>
             </div>
           ) : (
@@ -116,14 +121,14 @@ export function OrdersScreen() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th scope="col" className="px-4 py-2.5 font-medium">Product</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Reference</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Date</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Payment</th>
-                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Total</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Delivery status</th>
-                      <th scope="col" className="w-10 px-2"><span className="sr-only">Open</span></th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.product')}</th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.ref')}</th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.customer')}</th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.date')}</th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.payment')}</th>
+                      <th scope="col" className="px-4 py-2.5 text-right font-medium">{t('th.total')}</th>
+                      <th scope="col" className="px-4 py-2.5 font-medium">{t('th.status')}</th>
+                      <th scope="col" className="w-10 px-2"><span className="sr-only">{t('ai.view')}</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -141,7 +146,7 @@ export function OrdersScreen() {
                               {o.fromChat && (
                                 <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-accent px-1.5 py-0.5 align-middle text-[10px] font-medium text-accent-foreground">
                                   <Sparkles className="size-2.5" aria-hidden />
-                                  From chat
+                                  {t('orders.fromChat')}
                                 </span>
                               )}
                             </span>
@@ -165,7 +170,7 @@ export function OrdersScreen() {
                             className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                           >
                             <ChevronRight className="size-4" aria-hidden />
-                            <span className="sr-only">View order {o.ref}</span>
+                            <span className="sr-only">{interpolate(t('orders.viewRef'), { ref: o.ref })}</span>
                           </button>
                         </td>
                       </tr>

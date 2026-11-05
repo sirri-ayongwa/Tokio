@@ -10,19 +10,31 @@ export function orderTotal(order: Pick<OrderDraft, 'quantity' | 'unitPrice' | 'd
 
 export const paymentLabels: Record<PaymentMethod, string> = {
   cod: 'Cash on Delivery',
-  bkash: 'bKash (demo)',
+  bkash: 'bKash',
+}
+
+export function fmtTime(d: Date) {
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+export function fmtDate(d: Date) {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export function fmtStamp(d: Date) {
+  return `${fmtDate(d)}, ${fmtTime(d)}`
 }
 
 export function nowTime() {
-  return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return fmtTime(new Date())
 }
 
 export function nowDate() {
-  return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return fmtDate(new Date())
 }
 
 export function nowStamp() {
-  return `${nowDate()}, ${nowTime()}`
+  return fmtStamp(new Date())
 }
 
 export function uid(prefix = 'id') {

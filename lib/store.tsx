@@ -1,166 +1,472 @@
 'use client'
 
-import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react'
-import { initialMessages, initialOrders, initialReviews, TRACKING_STAGES } from './mock-data'
-import type { Lang, Message, Order, Review, Role, Tab } from './types'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { toast } from 'sonner'
+import { createRealtimeClient, type SealedLiveQuery } from '@neon/realtime/client'
+import { RealtimeProvider, useLiveQuery } from '@neon/realtime-react'
+import { PRODUCT, SHOP } from './constants'
+import { fmtDate, fmtTime } from './format'
+import type {
+  Lang,
+  Message,
+  MessageRow,
+  Order,
+  OrderDraft,
+  OrderRow,
+  ProfileRow,
+  Review,
+  ReviewMarkRow,
+  ReviewRow,
+  Role,
+  Tab,
+  LiveKind,
+} from './types'
 
-const STORAGE_KEY = 'orderbridge-demo-v1'
+export interface SessionUser {
+  id: string
+  name: string
+  email: string
+}
 
-interface PersistedState {
-  messages: Message[]
-  orders: Order[]
-  reviews: Review[]
-  phoneVerified: boolean
+interface PersistedPrefs {
   lang: Lang
   role: Role
   showTranslations: boolean
 }
 
-interface State extends PersistedState {
+interface State extends PersistedPrefs {
   tab: Tab
   openOrderId: string | null
   reviewOrderId: string | null
-  hydrated: boolean
+  messages: Message[]
+  orders: Order[]
+  reviews: Review[]
+  marks: Set<string>
+  phoneVerified: boolean
+  phone: string | null
+  synced: boolean
 }
 
 type Action =
-  | { type: 'hydrate'; payload: Partial<PersistedState> }
-  | { type: 'reset' }
+  | { type: 'prefs'; payload: Partial<PersistedPrefs> }
+  | { type: 'sync'; kind: 'orders'; rows: OrderRow[] }
+  | { type: 'sync'; kind: 'messages'; rows: MessageRow[] }
+  | { type: 'sync'; kind: 'reviews'; rows: ReviewRow[] }
+  | { type: 'sync'; kind: 'reviewMarks'; rows: ReviewMarkRow[] }
+  | { type: 'sync'; kind: 'profile'; rows: ProfileRow[] }
+  | { type: 'synced' }
   | { type: 'setTab'; tab: Tab }
   | { type: 'openOrder'; id: string | null }
   | { type: 'startReview'; orderId: string | null }
-  | { type: 'sendMessage'; message: Message }
   | { type: 'setLang'; lang: Lang }
   | { type: 'setRole'; role: Role }
   | { type: 'toggleTranslations' }
-  | { type: 'confirmOrder'; order: Order; message: Message }
-  | { type: 'advanceTracking'; id: string; time: string }
-  | { type: 'cancelOrder'; id: string }
-  | { type: 'verifyPhone' }
-  | { type: 'addReview'; review: Review; orderId: string | null }
-  | { type: 'toggleHelpful'; id: string }
 
-const persistedDefaults: PersistedState = {
-  messages: initialMessages,
-  orders: initialOrders,
-  reviews: initialReviews,
+const PREFS_KEY = 'tokio-prefs-v1'
+
+const initialState: State = {
+  tab: 'chat',
+  openOrderId: null,
+  reviewOrderId: null,
+  messages: [],
+  orders: [],
+  reviews: [],
+  marks: new Set<string>(),
   phoneVerified: false,
+  phone: null,
+  synced: false,
   lang: 'en',
   role: 'buyer',
   showTranslations: true,
 }
 
-const initialState: State = {
-  ...persistedDefaults,
-  tab: 'chat',
-  openOrderId: null,
-  reviewOrderId: null,
-  hydrated: false,
-}
+const toDate = (d: string | Date) => (d instanceof Date ? d : new Date(d))
+
+const toMessage = (r: MessageRow): Message => ({
+  id: r.id,
+  sender: r.sender,
+  kind: r.kind,
+  text: r.text ?? undefined,
+  lang: r.lang ?? undefined,
+  translation: r.translation ?? undefined,
+  orderId: r.order_id ?? undefined,
+  imageUrl: r.image_url ?? undefined,
+  time: fmtTime(toDate(r.created_at)),
+})
+
+const toOrder = (r: OrderRow): Order => ({
+  id: r.id,
+  ref: r.ref,
+  product: r.product,
+  image: r.image || PRODUCT.image,
+  quantity: r.quantity,
+  unitPrice: r.unit_price,
+  deliveryFee: r.delivery_fee,
+  payment: r.payment,
+  address: r.address,
+  customer: r.customer,
+  customerPhoneVerified: r.customer_phone_verified,
+  seller: r.seller,
+  createdAt: fmtDate(toDate(r.created_at)),
+  status: r.status,
+  trackingRef: r.tracking_ref,
+  trackingStage: r.tracking_stage,
+  trackingTimes: r.tracking_times,
+  reviewed: r.reviewed,
+  fromChat: r.from_chat,
+})
+
+const toReview = (r: ReviewRow, marks: Set<string>): Review => ({
+  id: r.id,
+  name: r.name,
+  initials: r.initials,
+  avatarColor: r.avatar_color,
+  rating: r.rating,
+  text: r.text,
+  date: fmtDate(toDate(r.created_at)),
+  photos: r.photos ?? [],
+  verified: r.verified,
+  helpful: r.helpful,
+  markedHelpful: marks.has(r.id),
+  orderId: r.order_id,
+})
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'hydrate':
-      return { ...state, ...action.payload, hydrated: true }
-    case 'reset':
-      return { ...initialState, hydrated: true }
+    case 'prefs':
+      return { ...state, ...action.payload }
+    case 'sync': {
+      if (action.kind === 'orders') return { ...state, orders: action.rows.map(toOrder) }
+      if (action.kind === 'messages') return { ...state, messages: action.rows.map(toMessage) }
+      if (action.kind === 'profile') {
+        const p = action.rows[0]
+        return { ...state, phoneVerified: p?.phone_verified ?? false, phone: p?.phone ?? null }
+      }
+      if (action.kind === 'reviewMarks') {
+        const marks = new Set(action.rows.map((r) => r.review_id))
+        return {
+          ...state,
+          marks,
+          reviews: state.reviews.map((r) => ({ ...r, markedHelpful: marks.has(r.id) })),
+        }
+      }
+      return { ...state, reviews: action.rows.map((r) => toReview(r, state.marks)) }
+    }
+    case 'synced':
+      return { ...state, synced: true }
     case 'setTab':
       return { ...state, tab: action.tab }
     case 'openOrder':
       return { ...state, openOrderId: action.id }
     case 'startReview':
       return { ...state, reviewOrderId: action.orderId }
-    case 'sendMessage':
-      return { ...state, messages: [...state.messages, action.message] }
     case 'setLang':
       return { ...state, lang: action.lang }
     case 'setRole':
       return { ...state, role: action.role, lang: action.role === 'seller' ? 'bn' : 'en' }
     case 'toggleTranslations':
       return { ...state, showTranslations: !state.showTranslations }
-    case 'confirmOrder':
-      return {
-        ...state,
-        orders: [action.order, ...state.orders],
-        messages: [...state.messages, action.message],
-      }
-    case 'advanceTracking':
-      return {
-        ...state,
-        orders: state.orders.map((order) => {
-          if (order.id !== action.id || order.status !== 'active') return order
-          const nextStage = Math.min(order.trackingStage + 1, TRACKING_STAGES.length - 1)
-          const trackingTimes = [...order.trackingTimes]
-          trackingTimes[nextStage] = action.time
-          return {
-            ...order,
-            trackingStage: nextStage,
-            trackingTimes,
-            status: nextStage === TRACKING_STAGES.length - 1 ? 'completed' : 'active',
-          }
-        }),
-      }
-    case 'cancelOrder':
-      return {
-        ...state,
-        orders: state.orders.map((o) => (o.id === action.id ? { ...o, status: 'cancelled' } : o)),
-      }
-    case 'verifyPhone':
-      return {
-        ...state,
-        phoneVerified: true,
-        orders: state.orders.map((o) => (o.fromChat ? { ...o, customerPhoneVerified: true } : o)),
-      }
-    case 'addReview':
-      return {
-        ...state,
-        reviews: [action.review, ...state.reviews],
-        orders: state.orders.map((o) => (o.id === action.orderId ? { ...o, reviewed: true } : o)),
-        reviewOrderId: null,
-      }
-    case 'toggleHelpful':
-      return {
-        ...state,
-        reviews: state.reviews.map((r) =>
-          r.id === action.id
-            ? { ...r, markedHelpful: !r.markedHelpful, helpful: r.helpful + (r.markedHelpful ? -1 : 1) }
-            : r,
-        ),
-      }
   }
 }
 
-const StoreContext = createContext<{ state: State; dispatch: React.Dispatch<Action> } | null>(null)
+async function api(path: string, body?: unknown) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`)
+  return data as { kind?: string; txid?: string | null; [k: string]: unknown }
+}
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState)
-  const loaded = useRef(false)
+async function fetchSealed(kind: LiveKind) {
+  const res = await fetch('/api/live', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ kind }),
+  })
+  if (!res.ok) throw new Error(`Could not open live ${kind} (${res.status})`)
+  return res.json()
+}
 
+interface LiveUtils {
+  awaitTxId: (txid: string, timeout?: number) => Promise<unknown>
+}
+
+interface StoreCtx {
+  state: State
+  dispatch: React.Dispatch<Action>
+  user: SessionUser
+  actions: {
+    sendMessage: (m: {
+      sender: Role
+      kind: Message['kind']
+      text?: string
+      lang?: Lang
+      translation?: string
+      orderId?: string
+      imageUrl?: string
+    }) => Promise<void>
+    confirmOrder: (draft: OrderDraft) => Promise<{ orderId: string; ref: string }>
+    cancelOrder: (id: string) => Promise<void>
+    refreshTracking: (id: string) => Promise<{ advanced: number }>
+    verifyPhone: (phone: string) => Promise<void>
+    addReview: (r: { orderId: string; rating: number; text: string; photos: string[] }) => Promise<void>
+    toggleHelpful: (id: string) => Promise<void>
+    uploadImage: (file: File) => Promise<string>
+    clearAll: () => Promise<void>
+  }
+}
+
+const StoreContext = createContext<StoreCtx | null>(null)
+
+export function StoreProvider({
+  user,
+  children,
+  initialRole = 'buyer',
+}: {
+  user: SessionUser
+  children: ReactNode
+  initialRole?: Role
+}) {
+  const [state, dispatch] = useReducer(reducer, { ...initialState, role: initialRole })
+  const liveUtils = useRef<Partial<Record<LiveKind, LiveUtils>>>({})
+  const [rtClient] = useState(() =>
+    createRealtimeClient({ url: process.env.NEXT_PUBLIC_NEON_REALTIME_URL! }),
+  )
+  const prefsLoaded = useRef(false)
+
+  // Load UI preferences (language/role/translation toggle) from local storage.
   useEffect(() => {
-    if (loaded.current) return
-    loaded.current = true
+    if (prefsLoaded.current) return
+    prefsLoaded.current = true
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      dispatch({ type: 'hydrate', payload: raw ? (JSON.parse(raw) as Partial<PersistedState>) : {} })
+      const raw = window.localStorage.getItem(PREFS_KEY)
+      if (raw) dispatch({ type: 'prefs', payload: JSON.parse(raw) })
     } catch {
-      dispatch({ type: 'hydrate', payload: {} })
+      // prefs stay at defaults
     }
   }, [])
 
   useEffect(() => {
-    if (!state.hydrated) return
-    const { messages, orders, reviews, phoneVerified, lang, role, showTranslations } = state
+    if (!prefsLoaded.current) return
+    const { lang, role, showTranslations } = state
     try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ messages, orders, reviews, phoneVerified, lang, role, showTranslations }),
-      )
+      window.localStorage.setItem(PREFS_KEY, JSON.stringify({ lang, role, showTranslations }))
     } catch {
-      // Storage can be full or unavailable (private mode); the demo still works in memory.
+      // storage unavailable
     }
-  }, [state])
+  }, [state.lang, state.role, state.showTranslations])
 
-  return <StoreContext.Provider value={{ state, dispatch }}>{children}</StoreContext.Provider>
+  const wait = useCallback(async (kind: LiveKind, txid?: string | null) => {
+    if (!txid) return
+    try {
+      await liveUtils.current[kind]?.awaitTxId(txid, 10_000)
+    } catch {
+      // The row will still arrive on the subscription; don't block the UI.
+    }
+  }, [])
+
+  const actions = useMemo<StoreCtx['actions']>(
+    () => ({
+      sendMessage: async (m) => {
+        const r = await api('/api/messages', m)
+        await wait('messages', r.txid)
+      },
+      confirmOrder: async (draft) => {
+        const r = await api('/api/orders', {
+          ...draft,
+          image: PRODUCT.image,
+          seller: SHOP.name,
+        })
+        await wait('orders', r.txid)
+        await wait('messages', r.txid)
+        return { orderId: r.orderId as string, ref: r.ref as string }
+      },
+      cancelOrder: async (id) => {
+        const res = await fetch(`/api/orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Could not cancel order')
+        await wait('orders', data.txid)
+      },
+      refreshTracking: async (id) => {
+        const res = await fetch(`/api/orders/${id}/advance`, { method: 'POST' })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Courier sync failed')
+        return { advanced: data.advanced ?? 0 }
+      },
+      verifyPhone: async (phone) => {
+        const r = await api('/api/profile', { phone, phoneVerified: true })
+        await wait('profile', r.txid)
+      },
+      addReview: async (r) => {
+        const res = await api('/api/reviews', r)
+        await wait('reviews', res.txid)
+      },
+      toggleHelpful: async (id) => {
+        const r = await api(`/api/reviews/${id}/helpful`)
+        await wait('reviews', r.txid)
+      },
+      uploadImage: async (file) => {
+        const ext = file.name.split('.').pop() ?? 'jpg'
+        const { uploadUrl, publicUrl } = await api('/api/uploads', {
+          contentType: file.type,
+          ext,
+        })
+        const put = await fetch(uploadUrl as string, {
+          method: 'PUT',
+          headers: { 'content-type': file.type },
+          body: file,
+        })
+        if (!put.ok) throw new Error('Upload to storage failed')
+        return publicUrl as string
+      },
+      clearAll: async () => {
+        await api('/api/reset')
+      },
+    }),
+    [wait],
+  )
+
+  const ctx = useMemo<StoreCtx>(
+    () => ({ state, dispatch, user, actions }),
+    [state, user, actions],
+  )
+
+  return (
+    <RealtimeProvider client={rtClient}>
+      <StoreContext.Provider value={ctx}>
+        {children}
+        <LiveSync userId={user.id} dispatch={dispatch} liveUtils={liveUtils} />
+      </StoreContext.Provider>
+    </RealtimeProvider>
+  )
+}
+
+const KINDS: LiveKind[] = ['orders', 'messages', 'reviews', 'reviewMarks', 'profile']
+
+function LiveSync({
+  userId,
+  dispatch,
+  liveUtils,
+}: {
+  userId: string
+  dispatch: React.Dispatch<Action>
+  liveUtils: React.MutableRefObject<Partial<Record<LiveKind, LiveUtils>>>
+}) {
+  const [sealed, setSealed] = useState<Record<LiveKind, SealedLiveQuery<unknown>> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(KINDS.map((k) => fetchSealed(k)))
+      .then((results) => {
+        if (cancelled) return
+        setSealed(Object.fromEntries(KINDS.map((k, i) => [k, results[i]])) as never)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  useEffect(() => {
+    if (error) toast.error('Live connection failed', { description: error })
+  }, [error])
+
+  if (!sealed) return null
+  return <LiveQueries sealed={sealed} dispatch={dispatch} liveUtils={liveUtils} />
+}
+
+function LiveQueries({
+  sealed,
+  dispatch,
+  liveUtils,
+}: {
+  sealed: Record<LiveKind, SealedLiveQuery<unknown>>
+  dispatch: React.Dispatch<Action>
+  liveUtils: React.MutableRefObject<Partial<Record<LiveKind, LiveUtils>>>
+}) {
+  const ordersQ = useLiveQuery(sealed.orders as SealedLiveQuery<OrderRow>, {
+    refreshQuery: useCallback(() => fetchSealed('orders'), []),
+  })
+  const messagesQ = useLiveQuery(sealed.messages as SealedLiveQuery<MessageRow>, {
+    refreshQuery: useCallback(() => fetchSealed('messages'), []),
+  })
+  const reviewsQ = useLiveQuery(sealed.reviews as SealedLiveQuery<ReviewRow>, {
+    refreshQuery: useCallback(() => fetchSealed('reviews'), []),
+  })
+  const marksQ = useLiveQuery(sealed.reviewMarks as SealedLiveQuery<ReviewMarkRow>, {
+    refreshQuery: useCallback(() => fetchSealed('reviewMarks'), []),
+  })
+  const profileQ = useLiveQuery(sealed.profile as SealedLiveQuery<ProfileRow>, {
+    refreshQuery: useCallback(() => fetchSealed('profile'), []),
+  })
+
+  useEffect(() => {
+    liveUtils.current = {
+      orders: ordersQ.utils,
+      messages: messagesQ.utils,
+      reviews: reviewsQ.utils,
+      reviewMarks: marksQ.utils,
+      profile: profileQ.utils,
+    } as never
+  })
+
+  useEffect(() => {
+    if (ordersQ.data) dispatch({ type: 'sync', kind: 'orders', rows: ordersQ.data as OrderRow[] })
+  }, [ordersQ.data, dispatch])
+  useEffect(() => {
+    if (messagesQ.data)
+      dispatch({ type: 'sync', kind: 'messages', rows: messagesQ.data as MessageRow[] })
+  }, [messagesQ.data, dispatch])
+  useEffect(() => {
+    if (reviewsQ.data)
+      dispatch({ type: 'sync', kind: 'reviews', rows: reviewsQ.data as ReviewRow[] })
+  }, [reviewsQ.data, dispatch])
+  useEffect(() => {
+    if (marksQ.data)
+      dispatch({ type: 'sync', kind: 'reviewMarks', rows: marksQ.data as ReviewMarkRow[] })
+  }, [marksQ.data, dispatch])
+  useEffect(() => {
+    if (profileQ.data)
+      dispatch({ type: 'sync', kind: 'profile', rows: profileQ.data as ProfileRow[] })
+  }, [profileQ.data, dispatch])
+
+  useEffect(() => {
+    if (ordersQ.data && messagesQ.data && reviewsQ.data && marksQ.data && profileQ.data) {
+      dispatch({ type: 'synced' })
+    }
+  }, [ordersQ.data, messagesQ.data, reviewsQ.data, marksQ.data, profileQ.data, dispatch])
+
+  const errored =
+    ordersQ.status === 'error' ||
+    messagesQ.status === 'error' ||
+    reviewsQ.status === 'error' ||
+    marksQ.status === 'error' ||
+    profileQ.status === 'error'
+  useEffect(() => {
+    if (errored) toast.error('Live updates paused', { description: 'Reconnecting…' })
+  }, [errored])
+
+  return null
 }
 
 export function useStore() {

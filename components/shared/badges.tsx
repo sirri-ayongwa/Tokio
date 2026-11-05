@@ -1,8 +1,12 @@
+'use client'
+
 import { BadgeCheck, ShieldAlert, ShieldCheck, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useLang } from '@/lib/i18n'
 import type { OrderStatus } from '@/lib/types'
 
 export function VerifiedSellerBadge({ className }: { className?: string }) {
+  const { t } = useLang()
   return (
     <span
       className={cn(
@@ -11,32 +15,40 @@ export function VerifiedSellerBadge({ className }: { className?: string }) {
       )}
     >
       <BadgeCheck className="size-3.5" aria-hidden />
-      Verified seller
+      {t('badge.verifiedSeller')}
     </span>
   )
 }
 
 export function PhoneBadge({ verified }: { verified: boolean }) {
+  const { t } = useLang()
   return verified ? (
     <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
       <ShieldCheck className="size-3.5" aria-hidden />
-      Phone verified
+      {t('phone.verified')}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2 py-0.5 text-xs font-medium text-gold-foreground">
       <ShieldAlert className="size-3.5" aria-hidden />
-      Phone unverified
+      {t('phone.notVerified')}
     </span>
   )
 }
 
 const statusStyles: Record<OrderStatus, string> = {
-  active: 'bg-sky-50 text-sky-800 ring-sky-200',
-  completed: 'bg-accent text-accent-foreground ring-emerald-200',
-  cancelled: 'bg-red-50 text-red-700 ring-red-200',
+  active: 'bg-sky-500/15 text-sky-400 ring-sky-500/30',
+  completed: 'bg-accent text-accent-foreground ring-emerald-500/30',
+  cancelled: 'bg-red-500/15 text-red-400 ring-red-500/30',
+}
+
+const statusKey: Record<OrderStatus, string> = {
+  active: 'orders.statusActive',
+  completed: 'orders.statusCompleted',
+  cancelled: 'orders.statusCancelled',
 }
 
 export function StatusPill({ status, label }: { status: OrderStatus; label?: string }) {
+  const { t } = useLang()
   return (
     <span
       className={cn(
@@ -45,7 +57,7 @@ export function StatusPill({ status, label }: { status: OrderStatus; label?: str
       )}
     >
       <span className="size-1.5 rounded-full bg-current" aria-hidden />
-      {label ?? status.charAt(0).toUpperCase() + status.slice(1)}
+      {label ?? t(statusKey[status])}
     </span>
   )
 }

@@ -5,15 +5,17 @@ import Image from 'next/image'
 import { BadgeCheck, Lock, PenLine, ThumbsUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
-import { PRODUCT } from '@/lib/mock-data'
+import { PRODUCT, SHOP } from '@/lib/constants'
 import { formatTaka } from '@/lib/format'
+import { useLang, interpolate } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Review } from '@/lib/types'
 import { Stars } from '@/components/shared/badges'
 import { ReviewFormModal } from './review-form-modal'
 
 export function ReviewsScreen() {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, actions } = useStore()
+  const { t } = useLang()
   const [withPhoto, setWithPhoto] = useState(false)
   const reviews = state.reviews
   const visible = withPhoto ? reviews.filter((r) => r.photos.length) : reviews
@@ -27,10 +29,10 @@ export function ReviewsScreen() {
 
   const startReview = () => {
     if (eligible) return dispatch({ type: 'startReview', orderId: eligible.id })
-    toast('Reviews unlock after delivery', {
+    toast(t('reviews.noteTitle'), {
       description: pendingChatOrder
-        ? `Advance ${pendingChatOrder.ref} to Delivered in Orders first.`
-        : 'Create and confirm an order from chat first.',
+        ? interpolate(t('rv.unlockDesc1'), { ref: pendingChatOrder.ref })
+        : t('rv.unlockDesc2'),
     })
   }
 
@@ -39,8 +41,8 @@ export function ReviewsScreen() {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Ratings &amp; reviews</h1>
-            <p className="text-sm text-muted-foreground">Only buyers with a delivered order can review.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('rv.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('rv.sub')}</p>
           </div>
           <button
             type="button"
@@ -54,7 +56,7 @@ export function ReviewsScreen() {
             )}
           >
             {eligible ? <PenLine className="size-4" aria-hidden /> : <Lock className="size-4" aria-hidden />}
-            Write a review
+            {t('rv.write')}
           </button>
         </header>
 
@@ -66,7 +68,7 @@ export function ReviewsScreen() {
                 <h2 id="product-h" className="font-medium">
                   {PRODUCT.name}
                 </h2>
-                <p className="text-sm text-muted-foreground">Golden Bracelet Shop</p>
+                <p className="text-sm text-muted-foreground">{SHOP.name}</p>
                 <p className="text-sm font-semibold text-primary">{formatTaka(PRODUCT.price)}</p>
               </div>
             </section>
@@ -79,7 +81,9 @@ export function ReviewsScreen() {
                 <p className="text-5xl font-semibold tracking-tight tabular-nums">{avg.toFixed(1)}</p>
                 <div className="pb-1.5">
                   <Stars rating={avg} size="md" />
-                  <p className="text-xs text-muted-foreground">{reviews.length} ratings</p>
+                  <p className="text-xs text-muted-foreground">
+                    {interpolate(t('rv.n'), { n: reviews.length })}
+                  </p>
                 </div>
               </div>
               <ul className="mt-4 space-y-1.5">
@@ -100,10 +104,10 @@ export function ReviewsScreen() {
               <p className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                 <Lock className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden />
                 {pendingChatOrder
-                  ? `Your order ${pendingChatOrder.ref} is on its way. You can review it once it's delivered.`
+                  ? interpolate(t('rv.pending'), { ref: pendingChatOrder.ref })
                   : state.orders.some((o) => o.fromChat && o.reviewed)
-                    ? 'Thanks for reviewing! Your next delivered order can be reviewed too.'
-                    : 'Place an order from chat and receive it to leave a verified review.'}
+                    ? t('rv.thanks')
+                    : t('rv.placeFirst')}
               </p>
             )}
           </div>
@@ -111,7 +115,7 @@ export function ReviewsScreen() {
           <section aria-labelledby="list-h">
             <div className="mb-3 flex items-center justify-between">
               <h2 id="list-h" className="text-lg font-semibold">
-                {visible.length} review{visible.length === 1 ? '' : 's'}
+                {interpolate(t('rv.list'), { n: visible.length })}
               </h2>
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
@@ -120,17 +124,25 @@ export function ReviewsScreen() {
                   onChange={(e) => setWithPhoto(e.target.checked)}
                   className="size-4 accent-primary"
                 />
-                With photo
+                {t('rv.withPhoto')}
               </label>
             </div>
             {visible.length === 0 ? (
               <p className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                No reviews with photos yet.
+                {t('rv.photoEmpty')}
               </p>
             ) : (
               <ul className="space-y-3">
                 {visible.map((r) => (
-                  <ReviewCard key={r.id} review={r} onHelpful={() => dispatch({ type: 'toggleHelpful', id: r.id })} />
+                  <ReviewCard
+                    key={r.id}
+                    review={r}
+                    onHelpful={() =>
+                      actions
+                        .toggleHelpful(r.id)
+                        .catch((e) => toast.error(t('reviews.voteFail'), { description: e.message }))
+                    }
+                  />
                 ))}
               </ul>
             )}
@@ -144,6 +156,7 @@ export function ReviewsScreen() {
 }
 
 function ReviewCard({ review, onHelpful }: { review: Review; onHelpful: () => void }) {
+  const { t } = useLang()
   return (
     <li>
       <article className="rounded-2xl border bg-card p-4 sm:p-5">
@@ -164,7 +177,7 @@ function ReviewCard({ review, onHelpful }: { review: Review; onHelpful: () => vo
               {review.verified && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
                   <BadgeCheck className="size-3.5" aria-hidden />
-                  Verified purchase
+                  {t('reviews.verifiedPurchase')}
                 </span>
               )}
             </div>
@@ -200,7 +213,7 @@ function ReviewCard({ review, onHelpful }: { review: Review; onHelpful: () => vo
             )}
           >
             <ThumbsUp className={cn('size-3.5', review.markedHelpful && 'fill-current')} aria-hidden />
-            Helpful · {review.helpful}
+            {t('reviews.helpful')} · {review.helpful}
           </button>
         </footer>
       </article>

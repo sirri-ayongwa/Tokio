@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { BadgeCheck, Info, Languages, Sparkles } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { SHOP } from '@/lib/mock-data'
+import { SHOP } from '@/lib/constants'
+import { hasOrderSignals } from '@/lib/extract-order'
+import { useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Lang, Role } from '@/lib/types'
 import { Modal } from '@/components/ui/modal'
@@ -15,11 +17,13 @@ import { AiOrderModal } from './ai-order-modal'
 
 export function ChatScreen() {
   const { state } = useStore()
+  const { t } = useLang()
   const [aiOpen, setAiOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [sellerTyping, setSellerTyping] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const hasChatOrder = state.orders.some((o) => o.fromChat)
+  const showAiCard = !hasChatOrder && hasOrderSignals(state.messages)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
@@ -48,7 +52,7 @@ export function ChatScreen() {
               <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified seller" />
             </h1>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-emerald-700">Online</span> · Verified seller · {SHOP.responseTime}
+              <span className="font-medium text-primary">{t('chat.online')}</span> · Verified seller · {t('chat.responseTime')}
             </p>
           </div>
           <button
@@ -57,7 +61,7 @@ export function ChatScreen() {
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground xl:hidden"
           >
             <Info className="size-5" aria-hidden />
-            <span className="sr-only">Shop info and verification</span>
+            <span className="sr-only">{t('chat.about')}</span>
           </button>
         </header>
 
@@ -66,7 +70,9 @@ export function ChatScreen() {
         <div className="min-h-0 flex-1 overflow-y-auto bg-background">
           <div className="mx-auto max-w-3xl px-3 py-5 sm:px-6">
             <p className="mb-4 text-center">
-              <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">Today</span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                {state.lang === 'bn' ? 'আজ' : 'Today'}
+              </span>
             </p>
             <ol className="space-y-4" aria-label="Messages" aria-live="polite">
               {state.messages.map((m) => (
@@ -83,28 +89,26 @@ export function ChatScreen() {
                       />
                     ))}
                   </span>
-                  Seller is typing…
+                  {t('chat.seller')} {t('chat.typing')}
                 </li>
               )}
             </ol>
 
-            {!hasChatOrder && state.hydrated && (
+            {showAiCard && (
               <div className="mt-6 flex flex-col items-start gap-3 rounded-2xl border border-primary/20 bg-accent/50 p-4 sm:flex-row sm:items-center">
                 <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
                   <Sparkles className="size-4" aria-hidden />
                 </span>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold">Order details detected</p>
-                  <p className="text-sm text-muted-foreground">
-                    Product, price, delivery and payment were mentioned. Turn them into a confirmed order.
-                  </p>
+                  <p className="text-sm font-semibold">{t('chat.aiDetected')}</p>
+                  <p className="text-sm text-muted-foreground">{t('chat.aiDetectedDesc')}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAiOpen(true)}
                   className="rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
                 >
-                  Create order with AI
+                  {t('chat.createAi')}
                 </button>
               </div>
             )}
@@ -119,7 +123,7 @@ export function ChatScreen() {
         <ChatInfoPanel />
       </aside>
 
-      <Modal open={infoOpen} onClose={() => setInfoOpen(false)} title="Shop details">
+      <Modal open={infoOpen} onClose={() => setInfoOpen(false)} title={t('chat.about')}>
         <ChatInfoPanel />
       </Modal>
       <AiOrderModal open={aiOpen} onClose={() => setAiOpen(false)} />
@@ -162,25 +166,26 @@ function Segmented<T extends string>({
 
 function ChatToolbar() {
   const { state, dispatch } = useStore()
+  const { t } = useLang()
 
   return (
     <div className="flex items-center gap-x-4 gap-y-2 overflow-x-auto border-b bg-card/60 px-4 py-2 text-xs">
       <div className="flex shrink-0 items-center gap-2">
-        <span className="text-muted-foreground">Viewing as</span>
+        <span className="text-muted-foreground">{t('chat.viewAs')}</span>
         <Segmented<Role>
-          label="Viewing as"
+          label={t('chat.viewAs')}
           value={state.role}
           onChange={(role) => dispatch({ type: 'setRole', role })}
           options={[
-            { value: 'buyer', label: 'Buyer' },
-            { value: 'seller', label: 'Seller' },
+            { value: 'buyer', label: t('chat.roleBuyer') },
+            { value: 'seller', label: t('chat.roleSeller') },
           ]}
         />
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Languages className="size-4 text-muted-foreground" aria-hidden />
         <Segmented<Lang>
-          label="Preferred language"
+          label={t('chat.translations')}
           value={state.lang}
           onChange={(lang) => dispatch({ type: 'setLang', lang })}
           options={[
@@ -191,13 +196,13 @@ function ChatToolbar() {
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <span className="text-muted-foreground" aria-hidden>
-          Auto-translate
+          {state.showTranslations ? t('chat.translationsOn') : t('chat.translationsOff')}
         </span>
         <button
           type="button"
           role="switch"
           aria-checked={state.showTranslations}
-          aria-label="Auto-translate messages"
+          aria-label={t('chat.translations')}
           onClick={() => dispatch({ type: 'toggleTranslations' })}
           className={cn(
             'relative h-5 w-9 rounded-full transition-colors',

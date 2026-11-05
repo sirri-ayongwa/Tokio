@@ -8,32 +8,36 @@ import { Modal } from '@/components/ui/modal'
 import { PhoneBadge } from '@/components/shared/badges'
 import { PhoneVerifyButton } from '@/components/trust/phone-verify'
 import { useStore } from '@/lib/store'
-import { AI_DRAFT, AI_SOURCES, BUYER, PRODUCT, SHOP } from '@/lib/mock-data'
-import { formatTaka, nowDate, nowStamp, nowTime, orderTotal, paymentLabels } from '@/lib/format'
-import type { Order, OrderDraft, PaymentMethod } from '@/lib/types'
+import { SHOP } from '@/lib/constants'
+import { extractOrder, type Extraction } from '@/lib/extract-order'
+import { formatTaka, orderTotal, paymentLabels } from '@/lib/format'
+import { useLang, interpolate } from '@/lib/i18n'
+import type { OrderDraft, PaymentMethod } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-const ANALYSIS_STEPS = ['Reading 3 messages', 'Translating বাংলা → English', 'Extracting order details']
+const ANALYSIS_KEYS = ['ai.step1', 'ai.step2', 'ai.step3']
 
 type Errors = Partial<Record<keyof OrderDraft, string>>
 
-function validate(d: OrderDraft): Errors {
+function validate(d: OrderDraft, t: (k: string) => string): Errors {
   const errors: Errors = {}
-  if (!d.product.trim()) errors.product = 'Product name is required.'
+  if (!d.product.trim()) errors.product = t('ai.reqProduct')
   if (!Number.isInteger(d.quantity) || d.quantity < 1 || d.quantity > 20)
-    errors.quantity = 'Quantity must be a whole number from 1 to 20.'
-  if (!Number.isFinite(d.unitPrice) || d.unitPrice <= 0) errors.unitPrice = 'Price must be greater than ৳0.'
-  if (!Number.isFinite(d.deliveryFee) || d.deliveryFee < 0) errors.deliveryFee = 'Delivery fee can’t be negative.'
-  if (d.address.trim().length < 3) errors.address = 'Enter a delivery address.'
+    errors.quantity = t('ai.reqQty')
+  if (!Number.isFinite(d.unitPrice) || d.unitPrice <= 0) errors.unitPrice = t('ai.reqPrice')
+  if (!Number.isFinite(d.deliveryFee) || d.deliveryFee < 0) errors.deliveryFee = t('ai.reqFee')
+  if (d.address.trim().length < 3) errors.address = t('ai.reqAddress')
   return errors
 }
 
 export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, dispatch } = useStore()
-  const [phase, setPhase] = useState<'analyzing' | 'ready'>('analyzing')
+  const { state, dispatch, actions } = useStore()
+  const { t } = useLang()
+  const [phase, setPhase] = useState<'analyzing' | 'ready' | 'saving'>('analyzing')
   const [step, setStep] = useState(0)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<OrderDraft>(AI_DRAFT)
+  const [draft, setDraft] = useState<OrderDraft | null>(null)
+  const [sources, setSources] = useState<Extraction['sources'] | null>(null)
   const [errors, setErrors] = useState<Errors>({})
 
   useEffect(() => {
@@ -41,64 +45,75 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
     setPhase('analyzing')
     setStep(0)
     setEditing(false)
-    setDraft(AI_DRAFT)
     setErrors({})
     const timers = [
       setTimeout(() => setStep(1), 450),
       setTimeout(() => setStep(2), 900),
-      setTimeout(() => setPhase('ready'), 1400),
     ]
-    return () => timers.forEach(clearTimeout)
+    // The server reads the whole conversation through an LLM when configured;
+    // otherwise we fall back to the local extractor.
+    const analyse = async () => {
+      try {
+        const res = await fetch('/api/extract-order', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ messages: state.messages }),
+        })
+        if (!res.ok) throw new Error()
+        const ai = await res.json()
+        setDraft(ai)
+        setSources(null)
+      } catch {
+        const { draft, sources } = extractOrder(state.messages)
+        setDraft(draft)
+        setSources(sources)
+      }
+      setPhase('ready')
+    }
+    const t3 = setTimeout(analyse, 1200)
+    return () => {
+      timers.forEach(clearTimeout)
+      clearTimeout(t3)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const update = <K extends keyof OrderDraft>(key: K, value: OrderDraft[K]) => {
-    setDraft((d) => ({ ...d, [key]: value }))
+    setDraft((d) => (d ? { ...d, [key]: value } : d))
     setErrors((e) => ({ ...e, [key]: undefined }))
   }
 
-  const confirm = () => {
-    const found = validate(draft)
+  const confirm = async () => {
+    if (!draft) return
+    const found = validate(draft, t)
     if (Object.keys(found).length) {
       setErrors(found)
       setEditing(true)
       return
     }
-    const chatOrders = state.orders.filter((o) => o.fromChat).length
-    const stamp = nowStamp()
-    const order: Order = {
-      ...draft,
-      product: draft.product.trim(),
-      address: draft.address.trim(),
-      id: `o-${Date.now()}`,
-      ref: `OB-${1048 + chatOrders}`,
-      image: PRODUCT.image,
-      customer: BUYER.name,
-      customerPhoneVerified: state.phoneVerified,
-      seller: SHOP.name,
-      createdAt: nowDate(),
-      status: 'active',
-      trackingRef: `PATHAO-DEMO-${String(chatOrders + 1).padStart(3, '0')}`,
-      trackingStage: 1,
-      trackingTimes: [stamp, stamp, null, null, null],
-      reviewed: false,
-      fromChat: true,
-    }
-    dispatch({
-      type: 'confirmOrder',
-      order,
-      message: { id: `order-${order.id}`, sender: 'buyer', kind: 'order', orderId: order.id, time: nowTime() },
-    })
-    onClose()
-    toast.success(`Order ${order.ref} confirmed`, {
-      description: `${order.product} · ${formatTaka(orderTotal(order))} · Added to Orders`,
-      action: {
-        label: 'View',
-        onClick: () => {
-          dispatch({ type: 'setTab', tab: 'orders' })
-          dispatch({ type: 'openOrder', id: order.id })
+    setPhase('saving')
+    try {
+      const { orderId, ref } = await actions.confirmOrder(draft)
+      onClose()
+      toast.success(interpolate(t('ai.confirmed'), { ref }), {
+        description: interpolate(t('ai.confirmedDesc'), {
+          product: draft.product,
+          total: formatTaka(orderTotal(draft)),
+        }),
+        action: {
+          label: t('ai.view'),
+          onClick: () => {
+            dispatch({ type: 'setTab', tab: 'orders' })
+            dispatch({ type: 'openOrder', id: orderId })
+          },
         },
-      },
-    })
+      })
+    } catch (e) {
+      setPhase('ready')
+      toast.error(t('ai.fail'), {
+        description: e instanceof Error ? e.message : undefined,
+      })
+    }
   }
 
   return (
@@ -109,30 +124,35 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
       title={
         <span className="inline-flex items-center gap-2">
           <Sparkles className="size-4 text-primary" aria-hidden />
-          AI order assistant
+          {t('ai.title')}
         </span>
       }
-      description="Order details found in your conversation with Golden Bracelet Shop."
+      description={interpolate(t('ai.desc'), { shop: SHOP.name })}
       footer={
-        phase === 'ready' && (
+        phase === 'ready' && draft ? (
           <>
             <Button type="button" variant="outline" onClick={() => setEditing((e) => !e)}>
               {editing ? <Check aria-hidden /> : <Pencil aria-hidden />}
-              {editing ? 'Done editing' : 'Edit order'}
+              {editing ? t('ai.done') : t('ai.edit')}
             </Button>
             <Button type="button" onClick={confirm}>
               <Check aria-hidden />
-              Confirm order · {formatTaka(orderTotal(draft))}
+              {t('ai.confirm')} · {formatTaka(orderTotal(draft))}
             </Button>
           </>
-        )
+        ) : phase === 'saving' ? (
+          <Button type="button" disabled>
+            <Loader2 className="animate-spin" aria-hidden />
+            {t('ai.confirming')}
+          </Button>
+        ) : undefined
       }
     >
       {phase === 'analyzing' ? (
         <div className="py-6" role="status" aria-live="polite">
           <ul className="space-y-3">
-            {ANALYSIS_STEPS.map((label, i) => (
-              <li key={label} className="flex items-center gap-3 text-sm">
+            {ANALYSIS_KEYS.map((key, i) => (
+              <li key={key} className="flex items-center gap-3 text-sm">
                 {i < step ? (
                   <span className="grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
                     <Check className="size-3" aria-hidden />
@@ -142,7 +162,7 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
                 ) : (
                   <span className="size-5 rounded-full border-2 border-border" aria-hidden />
                 )}
-                <span className={cn(i > step && 'text-muted-foreground')}>{label}</span>
+                <span className={cn(i > step && 'text-muted-foreground')}>{t(key)}</span>
               </li>
             ))}
           </ul>
@@ -152,42 +172,41 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
             ))}
           </div>
         </div>
-      ) : (
+      ) : draft ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2.5 py-1 text-xs font-medium text-gold-foreground">
               <Sparkles className="size-3" aria-hidden />
-              AI-generated draft — please review
+              {t('ai.badge')}
             </span>
-            <span className="text-xs text-muted-foreground">Simulated extraction · no AI service connected</span>
           </div>
 
           {editing ? (
             <EditFields draft={draft} errors={errors} update={update} />
           ) : (
             <dl className="divide-y rounded-xl border">
-              <Row label="Product" value={draft.product} source={AI_SOURCES.product} />
-              <Row label="Quantity" value={String(draft.quantity)} source={AI_SOURCES.quantity} />
-              <Row label="Unit price" value={formatTaka(draft.unitPrice)} source={AI_SOURCES.unitPrice} />
-              <Row label="Delivery fee" value={formatTaka(draft.deliveryFee)} source={AI_SOURCES.deliveryFee} />
-              <Row label="Payment" value={paymentLabels[draft.payment]} source={AI_SOURCES.payment} />
-              <Row label="Delivery address" value={draft.address} source={AI_SOURCES.address} />
+              <Row label={t('ai.product')} value={draft.product} source={sources?.product} />
+              <Row label={t('ai.quantity')} value={String(draft.quantity)} source={sources?.quantity} />
+              <Row label={t('ai.unitPrice')} value={formatTaka(draft.unitPrice)} source={sources?.unitPrice} />
+              <Row label={t('ai.deliveryFee')} value={formatTaka(draft.deliveryFee)} source={sources?.deliveryFee} />
+              <Row label={t('ai.payment')} value={paymentLabels[draft.payment]} source={sources?.payment} />
+              <Row label={t('ai.address')} value={draft.address || '—'} source={sources?.address} />
             </dl>
           )}
 
           <div className="rounded-xl bg-muted/60 px-4 py-3">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>
-                Subtotal ({draft.quantity || 0} × {formatTaka(draft.unitPrice || 0)})
+                {t('ai.subtotal')} ({draft.quantity || 0} × {formatTaka(draft.unitPrice || 0)})
               </span>
               <span>{formatTaka((draft.quantity || 0) * (draft.unitPrice || 0))}</span>
             </div>
             <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Delivery</span>
+              <span>{t('ai.delivery')}</span>
               <span>{formatTaka(draft.deliveryFee || 0)}</span>
             </div>
             <div className="mt-2 flex items-baseline justify-between border-t pt-2">
-              <span className="font-semibold">Total</span>
+              <span className="font-semibold">{t('ai.total')}</span>
               <output aria-live="polite" className="text-xl font-semibold text-primary tabular-nums">
                 {formatTaka(orderTotal({
                   quantity: draft.quantity || 0,
@@ -198,28 +217,36 @@ export function AiOrderModal({ open, onClose }: { open: boolean; onClose: () => 
             </div>
           </div>
 
+          {!draft.address.trim() && (
+            <p className="text-sm text-gold-foreground" role="note">
+              {t('ai.noAddress')}
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Buyer trust check</p>
+              <p className="text-sm font-medium">{t('ai.trustCheck')}</p>
               <PhoneBadge verified={state.phoneVerified} />
             </div>
             <PhoneVerifyButton />
           </div>
         </div>
-      )}
+      ) : null}
     </Modal>
   )
 }
 
-function Row({ label, value, source }: { label: string; value: string; source: string }) {
+function Row({ label, value, source }: { label: string; value: string; source?: string }) {
   return (
     <div className="grid grid-cols-[7.5rem_1fr] gap-3 px-4 py-2.5 sm:grid-cols-[9rem_1fr]">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="min-w-0">
         <p className="text-sm font-medium">{value}</p>
-        <p className="truncate text-[11px] text-muted-foreground" title={source}>
-          {source}
-        </p>
+        {source && (
+          <p className="truncate text-[11px] text-muted-foreground" title={source}>
+            {source}
+          </p>
+        )}
       </dd>
     </div>
   )
@@ -237,12 +264,13 @@ function EditFields({
   errors: Errors
   update: <K extends keyof OrderDraft>(key: K, value: OrderDraft[K]) => void
 }) {
+  const { t } = useLang()
   const num = (v: string) => (v === '' ? Number.NaN : Number(v))
 
   return (
     <fieldset className="grid gap-4 sm:grid-cols-2">
-      <legend className="sr-only">Edit order details</legend>
-      <Field id="f-product" label="Product name" error={errors.product} className="sm:col-span-2">
+      <legend className="sr-only">{t('ai.edit')}</legend>
+      <Field id="f-product" label={t('ai.productName')} error={errors.product} className="sm:col-span-2">
         <input
           id="f-product"
           className={inputClass}
@@ -251,7 +279,7 @@ function EditFields({
           aria-invalid={!!errors.product}
         />
       </Field>
-      <Field id="f-qty" label="Quantity" error={errors.quantity}>
+      <Field id="f-qty" label={t('ai.quantity')} error={errors.quantity}>
         <div className="flex">
           <button
             type="button"
@@ -283,7 +311,7 @@ function EditFields({
           </button>
         </div>
       </Field>
-      <Field id="f-price" label="Unit price (৳)" error={errors.unitPrice}>
+      <Field id="f-price" label={t('ai.pricePh')} error={errors.unitPrice}>
         <input
           id="f-price"
           type="number"
@@ -295,7 +323,7 @@ function EditFields({
           aria-invalid={!!errors.unitPrice}
         />
       </Field>
-      <Field id="f-fee" label="Delivery fee (৳)" error={errors.deliveryFee}>
+      <Field id="f-fee" label={t('ai.feePh')} error={errors.deliveryFee}>
         <input
           id="f-fee"
           type="number"
@@ -307,7 +335,7 @@ function EditFields({
           aria-invalid={!!errors.deliveryFee}
         />
       </Field>
-      <Field id="f-pay" label="Payment method">
+      <Field id="f-pay" label={t('ai.paymentMethod')}>
         <select
           id="f-pay"
           className={inputClass}
@@ -318,7 +346,7 @@ function EditFields({
           <option value="bkash">{paymentLabels.bkash}</option>
         </select>
       </Field>
-      <Field id="f-address" label="Delivery address" error={errors.address} className="sm:col-span-2">
+      <Field id="f-address" label={t('ai.address')} error={errors.address} className="sm:col-span-2">
         <textarea
           id="f-address"
           rows={2}

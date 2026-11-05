@@ -1,9 +1,13 @@
+'use client'
+
 import { Check } from 'lucide-react'
-import { TRACKING_STAGES } from '@/lib/mock-data'
+import { TRACKING_STAGES } from '@/lib/constants'
+import { useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Order } from '@/lib/types'
 
 export function TrackingTimeline({ order }: { order: Order }) {
+  const { t } = useLang()
   const cancelled = order.status === 'cancelled'
 
   return (
@@ -36,14 +40,14 @@ export function TrackingTimeline({ order }: { order: Order }) {
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className={cn('text-sm font-medium', !done && 'text-muted-foreground')}>
-                  {stage.title}
-                  <span className="sr-only">{done ? ' — completed' : ' — pending'}</span>
+                  {t(`track.stage${i + 1}`)}
+                  <span className="sr-only">{done ? ` ${t('track.completedSr')}` : ` ${t('track.pendingSr')}`}</span>
                 </p>
                 {order.trackingTimes[i] && (
                   <p className="text-xs text-muted-foreground tabular-nums">{order.trackingTimes[i]}</p>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{stage.description}</p>
+              <p className="text-xs text-muted-foreground">{t(`track.desc${i + 1}`)}</p>
             </div>
           </li>
         )

@@ -1,11 +1,12 @@
 'use client'
 
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Paperclip, SendHorizontal, Sparkles } from 'lucide-react'
+import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { Loader2, Paperclip, SendHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
-import { SELLER_AUTO_REPLY } from '@/lib/mock-data'
-import { nowTime, uid } from '@/lib/format'
+import { SELLER_AUTO_REPLY } from '@/lib/constants'
+import { langOf } from '@/lib/extract-order'
+import { useLang } from '@/lib/i18n'
 
 const QUICK_REPLIES = {
   buyer: ['When will it arrive?', 'Do you have gift wrapping?', 'Can I see another photo?'],
@@ -19,37 +20,37 @@ export function Composer({
   onOpenAi: () => void
   onSellerTyping: (typing: boolean) => void
 }) {
-  const { state, dispatch } = useStore()
+  const { state, actions } = useStore()
+  const { t } = useLang()
   const [text, setText] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const autoReplied = useRef(false)
 
   const send = (value: string) => {
     const body = value.trim()
     if (!body) return
-    dispatch({
-      type: 'sendMessage',
-      message: { id: uid('new'), sender: state.role, kind: 'text', lang: state.lang, text: body, time: nowTime() },
-    })
+    const lang = langOf(body) === 'bn' ? 'bn' : state.lang
+    actions
+      .sendMessage({ sender: state.role, kind: 'text', lang, text: body })
+      .catch((e) => toast.error(t('chat.msgFail'), { description: e.message }))
     setText('')
 
-    const alreadyReplied = autoReplied.current || state.messages.some((m) => m.id.startsWith('auto'))
+    const alreadyReplied = autoReplied.current || state.messages.some((m) => m.sender === 'seller')
     if (state.role === 'buyer' && !alreadyReplied) {
       autoReplied.current = true
       setTimeout(() => onSellerTyping(true), 500)
       setTimeout(() => {
         onSellerTyping(false)
-        dispatch({
-          type: 'sendMessage',
-          message: {
-            id: uid('auto'),
+        actions
+          .sendMessage({
             sender: 'seller',
             kind: 'text',
             lang: 'bn',
             text: SELLER_AUTO_REPLY.text,
             translation: SELLER_AUTO_REPLY.translation,
-            time: nowTime(),
-          },
-        })
+          })
+          .catch(() => {})
       }, 2000)
     }
   }
@@ -61,6 +62,25 @@ export function Composer({
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) e.preventDefault()
+  }
+
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('chat.onlyImages'))
+      return
+    }
+    setUploading(true)
+    try {
+      const url = await actions.uploadImage(file)
+      await actions.sendMessage({ sender: state.role, kind: 'image', imageUrl: url })
+    } catch (err) {
+      toast.error(t('chat.uploadFail'), { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -79,16 +99,22 @@ export function Composer({
         ))}
       </div>
       <form onSubmit={onSubmit} className="flex items-center gap-2">
+        <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="sr-only" />
         <button
           type="button"
-          onClick={() => toast('Attachments are disabled in the demo', { description: 'Photos and files would be shared here.' })}
-          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
         >
-          <Paperclip className="size-5" aria-hidden />
-          <span className="sr-only">Attach a file</span>
+          {uploading ? (
+            <Loader2 className="size-5 animate-spin" aria-hidden />
+          ) : (
+            <Paperclip className="size-5" aria-hidden />
+          )}
+          <span className="sr-only">{t('chat.attach')}</span>
         </button>
         <label htmlFor="chat-input" className="sr-only">
-          Message
+          {t('chat.msgPlaceholder')}
         </label>
         <input
           id="chat-input"
@@ -97,7 +123,7 @@ export function Composer({
           onKeyDown={onKeyDown}
           autoComplete="off"
           lang={state.lang}
-          placeholder={state.lang === 'bn' ? 'মেসেজ লিখুন…' : 'Type a message…'}
+          placeholder={t('chat.msgPlaceholder')}
           className="h-11 min-w-0 flex-1 rounded-full border border-input bg-background px-4 text-[15px] placeholder:text-muted-foreground"
         />
         <button
@@ -106,8 +132,8 @@ export function Composer({
           className="inline-flex h-11 items-center gap-1.5 rounded-full border border-primary/30 bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:border-primary/60"
         >
           <Sparkles className="size-4" aria-hidden />
-          <span className="hidden sm:inline">Create order with AI</span>
-          <span className="sr-only sm:hidden">Create order with AI</span>
+          <span className="hidden sm:inline">{t('chat.createAi')}</span>
+          <span className="sr-only sm:hidden">{t('chat.createAi')}</span>
         </button>
         <button
           type="submit"
@@ -115,7 +141,7 @@ export function Composer({
           className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           <SendHorizontal className="size-5" aria-hidden />
-          <span className="sr-only">Send message</span>
+          <span className="sr-only">{t('chat.send')}</span>
         </button>
       </form>
     </div>

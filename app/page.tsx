@@ -1,9 +1,27 @@
+import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/app-shell'
+import { auth } from '@/lib/auth-server'
+import { ensureSchema, sqlDirect } from '@/lib/db'
 import { StoreProvider } from '@/lib/store'
 
-export default function Page() {
+export const dynamic = 'force-dynamic'
+
+export default async function Page() {
+  const { data: session } = await auth.getSession()
+  const user = session?.user
+
+  if (!user) redirect('/auth')
+
+  await ensureSchema()
+  const [profile] = await sqlDirect`
+    SELECT role FROM profiles WHERE user_id = ${user.id}`.catch(() => [])
+  const initialRole = profile?.role === 'merchant' ? 'seller' : 'buyer'
+
   return (
-    <StoreProvider>
+    <StoreProvider
+      user={{ id: user.id, name: user.name || user.email, email: user.email }}
+      initialRole={initialRole}
+    >
       <AppShell />
     </StoreProvider>
   )
