@@ -58,9 +58,9 @@ export function RoleSelect() {
       <div
         className={cn(
           'w-full max-w-md transition-opacity duration-500',
-          phase !== 'roles' && 'opacity-0',
+          phase === 'splash' && 'opacity-0',
         )}
-        aria-hidden={phase !== 'roles'}
+        aria-hidden={phase === 'splash'}
       >
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12 rounded-2xl" />
@@ -114,10 +114,15 @@ export function RoleSelect() {
         </p>
       </div>
 
-      {/* Language selection */}
+      {/* Language selection — modal over the blurred role select */}
       {phase === 'lang' && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-background px-4">
-          <div className="w-full max-w-xs rounded-2xl border bg-card p-6 text-center shadow-xs">
+        <div
+          className="absolute inset-0 z-20 grid place-items-center bg-background/50 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Choose your language"
+        >
+          <div className="w-full max-w-xs rounded-2xl border bg-card p-6 text-center shadow-xl">
             <span className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-accent text-primary">
               <Languages className="size-6" aria-hidden />
             </span>
