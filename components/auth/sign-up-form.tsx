@@ -45,14 +45,15 @@ export function SignUpForm({ role }: { role: AuthRole }) {
       return
     }
     setBusy(true)
-    const { error } = await authClient.signUp.email({ name, email: email.trim(), password })
-    if (error) {
-      setError(error.message ?? t('auth.signUpFailed'))
+    try {
+      const { error } = await authClient.signUp.email({ name, email: email.trim(), password })
+      if (error) throw new Error(error.message ?? t('auth.signUpFailed'))
+      await saveProfile({ role: 'shopper', phone, phoneVerified }).catch(() => {})
+      window.location.href = '/onboarding'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('auth.signUpFailed'))
       setBusy(false)
-      return
     }
-    await saveProfile({ role: 'shopper', phone, phoneVerified }).catch(() => {})
-    window.location.href = '/onboarding'
   }
 
   return role === 'merchant' ? (
@@ -173,26 +174,27 @@ function MerchantFields() {
       return
     }
     setBusy(true)
-    const { error } = await authClient.signUp.email({
-      name: yourName.trim() || businessName.trim(),
-      email: email.trim(),
-      password,
-    })
-    if (error) {
-      setError(error.message ?? t('auth.signUpFailed'))
+    try {
+      const { error } = await authClient.signUp.email({
+        name: yourName.trim() || businessName.trim(),
+        email: email.trim(),
+        password,
+      })
+      if (error) throw new Error(error.message ?? t('auth.signUpFailed'))
+      await saveProfile({
+        role: 'merchant',
+        businessName: businessName.trim(),
+        businessWebsite: website.trim() || null,
+        pickupAddress: pickupAddress.trim(),
+        category,
+        phone,
+        phoneVerified: verified,
+      }).catch(() => {})
+      window.location.href = '/'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('auth.signUpFailed'))
       setBusy(false)
-      return
     }
-    await saveProfile({
-      role: 'merchant',
-      businessName: businessName.trim(),
-      businessWebsite: website.trim() || null,
-      pickupAddress: pickupAddress.trim(),
-      category,
-      phone,
-      phoneVerified: verified,
-    }).catch(() => {})
-    window.location.href = '/'
   }
 
   const canSubmit =

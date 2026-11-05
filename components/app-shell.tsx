@@ -48,7 +48,9 @@ export function AppShell() {
   }
 
   const signOut = async () => {
-    await authClient.signOut()
+    try {
+      await authClient.signOut()
+    } catch {}
     window.location.reload()
   }
 
