@@ -55,6 +55,7 @@ interface State extends PersistedPrefs {
   messages: Message[]
   conversations: Conversation[]
   merchants: Merchant[]
+  merchantLoadStatus: 'loading' | 'ready' | 'error'
   products: Product[]
   activeConversationId: string | null
   orders: Order[]
@@ -84,6 +85,8 @@ type Action =
   | { type: 'sync'; kind: 'profile'; rows: ProfileRow[] }
   | { type: 'synced' }
   | { type: 'conversationData'; conversations: Conversation[]; merchants: Merchant[]; role: AccountRole }
+  | { type: 'merchantData'; merchants: Merchant[] }
+  | { type: 'merchantError' }
   | { type: 'selectConversation'; id: string | null }
   | { type: 'products'; products: Product[] }
   | { type: 'setTab'; tab: Tab }
@@ -102,6 +105,7 @@ const initialState: State = {
   messages: [],
   conversations: [],
   merchants: [],
+  merchantLoadStatus: 'loading',
   products: [],
   activeConversationId: null,
   orders: [],
@@ -230,6 +234,10 @@ function reducer(state: State, action: Action): State {
             ? state.activeConversationId
             : action.conversations[0]?.id ?? null,
       }
+    case 'merchantData':
+      return { ...state, merchants: action.merchants, merchantLoadStatus: 'ready' }
+    case 'merchantError':
+      return { ...state, merchantLoadStatus: 'error' }
     case 'selectConversation':
       return { ...state, activeConversationId: action.id }
     case 'products':
@@ -322,7 +330,11 @@ export function StoreProvider({
   initialRole?: Role
   realtimeUrl: string
 }) {
-  const [state, dispatch] = useReducer(reducer, { ...initialState, role: initialRole })
+  const [state, dispatch] = useReducer(reducer, {
+    ...initialState,
+    role: initialRole,
+    accountRole: initialRole === 'seller' ? 'merchant' : 'shopper',
+  })
   const liveUtils = useRef<Partial<Record<LiveKind, LiveUtils>>>({})
   const [rtClient] = useState(() => createRealtimeClient({ url: realtimeUrl }))
   const prefsLoaded = useRef(false)
@@ -452,13 +464,30 @@ export function StoreProvider({
 
   useEffect(() => {
     let cancelled = false
-    const load = () => fetch('/api/conversations')
+    let reportedError = false
+    const loadConversations = () => fetch('/api/conversations', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error('Could not load conversations')
         return res.json()
       })
       .then((data) => { if (!cancelled) dispatch({ type: 'conversationData', ...data }) })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled && !reportedError) {
+          reportedError = true
+          toast.error('Could not load conversations. Retrying automatically.')
+        }
+      })
+    const loadMerchants = () => fetch('/api/merchants', { cache: 'no-store' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load businesses')
+        return res.json()
+      })
+      .then((data) => { if (!cancelled) dispatch({ type: 'merchantData', merchants: data.merchants ?? [] }) })
+      .catch(() => { if (!cancelled) dispatch({ type: 'merchantError' }) })
+    const load = () => {
+      void loadConversations()
+      void loadMerchants()
+    }
     load()
     const interval = window.setInterval(load, 4000)
     return () => { cancelled = true; window.clearInterval(interval) }

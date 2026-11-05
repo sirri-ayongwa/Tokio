@@ -171,8 +171,10 @@ function EmptyChat() {
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search businesses" className="h-11 w-full rounded-xl border bg-card pl-10 pr-3 text-sm" />
             </label>
             <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
-            {merchants.length === 0 ? (
-              <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">No merchant accounts are available yet.</p>
+            {state.merchantLoadStatus === 'error' ? (
+              <p className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-center text-sm text-destructive">Businesses could not be loaded. Please reload the page and try again.</p>
+            ) : merchants.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">{state.merchantLoadStatus === 'loading' ? 'Loading businesses…' : 'No merchant accounts are available yet.'}</p>
             ) : merchants.map((item) => (
               <button key={item.id} type="button" onClick={() => actions.startConversation(item.id)} className="flex w-full items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50">
                 <span className="grid size-10 place-items-center rounded-full bg-accent font-semibold text-primary">{item.name.slice(0, 1).toUpperCase()}</span>
