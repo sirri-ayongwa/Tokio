@@ -107,15 +107,22 @@ CREATE SEQUENCE IF NOT EXISTS orders_ref_seq START 1048;
 let schemaPromise: Promise<unknown> | null = null
 
 export function ensureSchema() {
+  // orders_ref_seq is created last, so its presence means the schema already
+  // ran — one cheap lookup skips ~19 DDL round-trips on cold instances.
   // The serverless driver runs one statement per query, so split the DDL.
-  schemaPromise ??= SCHEMA.split(';')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .reduce(
-      (p, statement) => p.then(() => sqlDirect.query(statement)),
-      Promise.resolve<unknown>(null),
+  schemaPromise ??= sqlDirect`SELECT to_regclass('public.orders_ref_seq') AS ready`
+    .then(([row]) =>
+      row?.ready
+        ? true
+        : SCHEMA.split(';')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .reduce(
+              (p, statement) => p.then(() => sqlDirect.query(statement)),
+              Promise.resolve<unknown>(null),
+            )
+            .then(() => true),
     )
-    .then(() => true)
     .catch((err) => {
       schemaPromise = null
       throw err
