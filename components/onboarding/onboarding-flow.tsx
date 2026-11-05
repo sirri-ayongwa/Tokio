@@ -7,24 +7,16 @@ import {
   CheckCircle2,
   ImagePlus,
   Loader2,
-  Smartphone,
+  MapPin,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { BrandMark } from '@/components/app-shell'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
-import { useLang, interpolate } from '@/lib/i18n'
-import { sendOtp, verifyOtp } from '@/lib/otp-client'
-import { cn } from '@/lib/utils'
+import { useLang } from '@/lib/i18n'
 
-type Step = 'photo' | 'phone' | 'code'
-
-const bdDigits = (v: string) => {
-  const d = v.replace(/\D/g, '')
-  return d.startsWith('880') ? d.slice(3) : d.startsWith('0') ? d.slice(1) : d
-}
-const isBdPhone = (v: string) => /^1[3-9]\d{8}$/.test(bdDigits(v))
+type Step = 'photo' | 'address'
 
 export function OnboardingFlow({ userName }: { userName: string }) {
   const { t } = useLang()
@@ -32,34 +24,22 @@ export function OnboardingFlow({ userName }: { userName: string }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
-  const [phone, setPhone] = useState('+880 ')
-  const [alreadyVerified, setAlreadyVerified] = useState(false)
-  const [sentCode, setSentCode] = useState('')
-  const [code, setCode] = useState(['', '', '', ''])
+  const [address, setAddress] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [cooldown, setCooldown] = useState(0)
   const [skipOpen, setSkipOpen] = useState(false)
-  const codeRefs = useRef<(HTMLInputElement | null)[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Prefill phone + verified state captured during sign-up.
+  // Prefill the home address if one is already saved.
   useEffect(() => {
     fetch('/api/profile')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         const p = data?.profile
-        if (p?.phone) setPhone(p.phone)
-        if (p?.phoneVerified) setAlreadyVerified(true)
+        if (p?.address) setAddress(p.address)
       })
       .catch(() => {})
   }, [])
-
-  useEffect(() => {
-    if (!cooldown) return
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [cooldown])
 
   const done = () => {
     try {
@@ -103,72 +83,20 @@ export function OnboardingFlow({ userName }: { userName: string }) {
     }
   }
 
-  const sendCode = async () => {
-    try {
-      const { devCode } = await sendOtp(phone)
-      setSentCode(devCode ?? '')
-      setCode(['', '', '', ''])
-      setCooldown(30)
-      setError(null)
-      if (devCode) {
-        toast(interpolate(t('phone.smsTo'), { phone }), {
-          description: `Your Tokio verification code is ${devCode}`,
-          duration: 30_000,
-        })
-      } else {
-        toast(interpolate(t('phone.smsTo'), { phone }), {
-          description: t('phone.enterCode'),
-        })
-      }
-      setStep('code')
-      setTimeout(() => codeRefs.current[0]?.focus(), 50)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the code')
-    }
-  }
-
-  const onCodeDigit = (i: number, v: string) => {
-    const digit = v.replace(/\D/g, '').slice(-1)
-    setCode((c) => {
-      const next = [...c]
-      next[i] = digit
-      return next
-    })
-    if (digit && i < 3) codeRefs.current[i + 1]?.focus()
-    if (!digit && i > 0) codeRefs.current[i - 1]?.focus()
-    setError(null)
-  }
-
-  const onCodeKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !code[i] && i > 0) codeRefs.current[i - 1]?.focus()
-  }
-
-  const onCodePaste = (e: React.ClipboardEvent) => {
-    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4)
-    if (!digits) return
-    e.preventDefault()
-    setCode(digits.padEnd(4, '').split('').slice(0, 4))
-    codeRefs.current[Math.min(digits.length, 3)]?.focus()
-  }
-
-  const verify = async () => {
-    if (sentCode && code.join('') !== sentCode) {
-      setError(t('m.codeMismatch'))
-      return
-    }
+  const saveAddress = async () => {
     setBusy(true)
+    setError(null)
     try {
-      await verifyOtp(phone, code.join(''))
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ phone, phoneVerified: true }),
+        body: JSON.stringify({ address: address.trim() }),
       })
       if (!res.ok) throw new Error(t('ob.saveFail'))
-      toast.success(t('ob.verifiedToast'), { description: t('ob.verifiedToastDesc') })
+      toast.success(t('ob.savedToast'), { description: t('ob.savedToastDesc') })
       done()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('ob.verifyFail'))
+      setError(err instanceof Error ? err.message : t('ob.saveFail'))
       setBusy(false)
     }
   }
@@ -233,127 +161,59 @@ export function OnboardingFlow({ userName }: { userName: string }) {
               <input ref={fileRef} type="file" accept="image/*" onChange={onPhoto} className="sr-only" />
               <p className="text-center text-sm text-muted-foreground">{t('ob.photoHint')}</p>
               <div className="flex w-full gap-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setStep('phone')}>
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setStep('address')}>
                   {t('ob.skip')}
                 </Button>
-                <Button type="button" className="flex-1" onClick={() => setStep('phone')} disabled={uploading}>
+                <Button type="button" className="flex-1" onClick={() => setStep('address')} disabled={uploading}>
                   {t('ob.continue')}
                 </Button>
               </div>
             </div>
           )}
 
-          {step === 'phone' && (
+          {step === 'address' && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="ob-phone" className="text-sm font-medium">
-                  {t('m.phone')}
+                <label htmlFor="ob-address" className="text-sm font-medium">
+                  {t('ob.address')}
                 </label>
                 <div className="relative">
-                  <Smartphone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    id="ob-phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    value={phone}
+                    id="ob-address"
+                    type="text"
+                    autoComplete="street-address"
+                    value={address}
                     onChange={(e) => {
-                      setPhone(e.target.value)
+                      setAddress(e.target.value)
                       setError(null)
                     }}
-                    placeholder={t('m.phone.ph')}
+                    placeholder={t('ob.address.ph')}
                     className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-[15px] placeholder:text-muted-foreground"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">{t('ob.phoneHint')}</p>
+                <p className="text-xs text-muted-foreground">{t('ob.addressHint')}</p>
               </div>
-              {alreadyVerified ? (
-                <>
-                  <p className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-primary">
-                    <CheckCircle2 className="size-4" aria-hidden />
-                    {t('m.verified')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={done}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                  >
-                    {t('ob.continue')}
-                  </button>
-                </>
-              ) : (
-                isBdPhone(phone) && (
-                  <button
-                    type="button"
-                    onClick={sendCode}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                  >
-                    {t('m.sendCode')}
-                  </button>
-                )
+              {error && (
+                <p className="text-sm text-destructive" role="alert">
+                  {error}
+                </p>
               )}
+              <button
+                type="button"
+                onClick={saveAddress}
+                disabled={busy || !address.trim()}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                {t('ob.continue')}
+              </button>
               <button
                 type="button"
                 onClick={() => setSkipOpen(true)}
                 className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
               >
                 {t('ob.skipNow')}
-              </button>
-            </div>
-          )}
-
-          {step === 'code' && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {t('ob.codeHint')}{' '}
-                <span className="font-medium text-foreground">{phone}</span>
-              </p>
-              <div className="flex justify-center gap-2" onPaste={onCodePaste}>
-                {code.map((d, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => {
-                      codeRefs.current[i] = el
-                    }}
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={d}
-                    onChange={(e) => onCodeDigit(i, e.target.value)}
-                    onKeyDown={(e) => onCodeKeyDown(i, e)}
-                    aria-label={`Digit ${i + 1}`}
-                    className="size-12 rounded-lg border border-input bg-background text-center font-mono text-xl"
-                  />
-                ))}
-              </div>
-              {error && (
-                <p className="text-center text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={verify}
-                disabled={busy || code.join('').length !== 4}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
-                {t('ob.verify')}
-              </button>
-              <p className="text-center text-xs text-muted-foreground">
-                {cooldown > 0 ? (
-                  <>{t('ob.resendIn')} {cooldown}s</>
-                ) : (
-                  <button type="button" onClick={sendCode} className="font-medium text-primary hover:underline">
-                    {t('ob.resendCode')}
-                  </button>
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => setStep('phone')}
-                className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
-              >
-                {t('ob.changeNumber')}
               </button>
             </div>
           )}

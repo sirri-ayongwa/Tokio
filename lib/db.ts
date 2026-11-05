@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   business_name text,
   business_website text,
   pickup_address text,
+  address text,
+  address_visible boolean NOT NULL DEFAULT false,
   category text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -28,6 +30,8 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS business_name text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS business_website text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pickup_address text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address_visible boolean NOT NULL DEFAULT false;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS category text;
 
 CREATE TABLE IF NOT EXISTS orders (

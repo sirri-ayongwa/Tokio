@@ -15,6 +15,7 @@ export function ChatInfoPanel() {
   const { t } = useLang()
   const chatOrders = state.orders.filter((o) => o.fromChat)
   const avg = state.reviews.reduce((s, r) => s + r.rating, 0) / Math.max(1, state.reviews.length)
+  const profileAddress = state.accountRole === 'merchant' ? state.pickupAddress : state.address
 
   return (
     <div className="space-y-5">
@@ -82,6 +83,15 @@ export function ChatInfoPanel() {
             </div>
             <PhoneVerifyButton className="w-full" />
           </li>
+          {state.addressVisible && profileAddress && (
+            <li className="flex items-start gap-2.5">
+              <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <span className="min-w-0">
+                <span className="font-medium">{t('info.yourAddress')}</span>
+                <span className="block text-xs text-muted-foreground">{profileAddress}</span>
+              </span>
+            </li>
+          )}
         </ul>
       </section>
 

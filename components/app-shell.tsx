@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, LogOut, MessagesSquare, Package, Star, Trash2 } from 'lucide-react'
+import { Loader2, LogOut, MessagesSquare, Package, Settings, Star, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
@@ -11,12 +11,14 @@ import type { Tab } from '@/lib/types'
 import { ChatScreen } from './chat/chat-screen'
 import { OrdersScreen } from './orders/orders-screen'
 import { ReviewsScreen } from './reviews/reviews-screen'
+import { SettingsScreen } from './settings/settings-screen'
 import { OrderDetailModal } from './orders/order-detail-modal'
 
 const NAV: { id: Tab; labelKey: string; icon: typeof MessagesSquare }[] = [
   { id: 'chat', labelKey: 'nav.chat', icon: MessagesSquare },
   { id: 'orders', labelKey: 'nav.orders', icon: Package },
   { id: 'reviews', labelKey: 'nav.reviews', icon: Star },
+  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 export function BrandMark({ className }: { className?: string }) {
@@ -152,11 +154,12 @@ export function AppShell() {
         {state.tab === 'chat' && <ChatScreen />}
         {state.tab === 'orders' && <OrdersScreen />}
         {state.tab === 'reviews' && <ReviewsScreen />}
+        {state.tab === 'settings' && <SettingsScreen />}
       </main>
 
       <nav
         aria-label="Primary"
-        className="grid shrink-0 grid-cols-3 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="grid shrink-0 grid-cols-4 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {NAV.map(({ id, labelKey, icon: Icon }) => {
           const active = state.tab === id

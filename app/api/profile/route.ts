@@ -8,7 +8,10 @@ export async function GET() {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   await ensureSchema()
   const [row] = await sql`
-    SELECT phone, phone_verified AS "phoneVerified", role FROM profiles WHERE user_id = ${user.id}`
+    SELECT phone, phone_verified AS "phoneVerified", role,
+           address, pickup_address AS "pickupAddress",
+           address_visible AS "addressVisible"
+      FROM profiles WHERE user_id = ${user.id}`
   return Response.json({ profile: row ?? null })
 }
 
@@ -23,6 +26,8 @@ export async function POST(request: Request) {
     businessName?: string
     businessWebsite?: string
     pickupAddress?: string
+    address?: string
+    addressVisible?: boolean
     category?: string
   }
   if (body.role && !ROLES.has(body.role)) {
@@ -37,13 +42,15 @@ export async function POST(request: Request) {
     WITH p AS (
       INSERT INTO profiles (
         user_id, email, phone, phone_digits, phone_verified, role,
-        business_name, business_website, pickup_address, category
+        business_name, business_website, pickup_address, address,
+        address_visible, category
       )
       VALUES (
         ${user.id}, ${user.email}, ${body.phone ?? null}, ${digits},
         ${body.phoneVerified === true}, ${body.role ?? null},
         ${body.businessName ?? null}, ${body.businessWebsite ?? null},
-        ${body.pickupAddress ?? null}, ${body.category ?? null}
+        ${body.pickupAddress ?? null}, ${body.address ?? null},
+        ${body.addressVisible === true}, ${body.category ?? null}
       )
       ON CONFLICT (user_id)
       DO UPDATE SET email = EXCLUDED.email,
@@ -54,12 +61,16 @@ export async function POST(request: Request) {
                     business_name = COALESCE(EXCLUDED.business_name, profiles.business_name),
                     business_website = COALESCE(EXCLUDED.business_website, profiles.business_website),
                     pickup_address = COALESCE(EXCLUDED.pickup_address, profiles.pickup_address),
+                    address = COALESCE(EXCLUDED.address, profiles.address),
+                    address_visible = CASE WHEN ${body.addressVisible !== undefined}
+                                      THEN EXCLUDED.address_visible
+                                      ELSE profiles.address_visible END,
                     category = COALESCE(EXCLUDED.category, profiles.category),
                     updated_at = now()
       RETURNING user_id
     )
     UPDATE orders SET customer_phone_verified = ${body.phoneVerified === true}
-    WHERE user_id = ${user.id} AND from_chat = true
+    WHERE user_id = ${user.id} AND from_chat = true AND ${body.phoneVerified !== undefined}
     RETURNING pg_current_xact_id()::text AS txid`
   return Response.json({ kind: 'committed', txid: row?.txid ?? null })
 }

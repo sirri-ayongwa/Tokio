@@ -1,6 +1,7 @@
 export type Lang = 'en' | 'bn'
 export type Role = 'buyer' | 'seller'
-export type Tab = 'chat' | 'orders' | 'reviews'
+export type AccountRole = 'shopper' | 'merchant'
+export type Tab = 'chat' | 'orders' | 'reviews' | 'settings'
 export type PaymentMethod = 'cod' | 'bkash'
 export type OrderStatus = 'active' | 'completed' | 'cancelled'
 export type MessageKind = 'text' | 'product' | 'order' | 'image'
@@ -115,6 +116,10 @@ export interface ProfileRow {
   user_id: string
   phone: string | null
   phone_verified: boolean
+  role: AccountRole | null
+  address: string | null
+  pickup_address: string | null
+  address_visible: boolean
 }
 
 export type LiveKind = 'orders' | 'messages' | 'reviews' | 'reviewMarks' | 'profile'

@@ -17,6 +17,7 @@ import { RealtimeProvider, useLiveQuery } from '@neon/realtime-react'
 import { PRODUCT, SHOP } from './constants'
 import { fmtDate, fmtTime } from './format'
 import type {
+  AccountRole,
   Lang,
   Message,
   MessageRow,
@@ -54,6 +55,10 @@ interface State extends PersistedPrefs {
   marks: Set<string>
   phoneVerified: boolean
   phone: string | null
+  accountRole: AccountRole | null
+  address: string | null
+  pickupAddress: string | null
+  addressVisible: boolean
   synced: boolean
 }
 
@@ -84,6 +89,10 @@ const initialState: State = {
   marks: new Set<string>(),
   phoneVerified: false,
   phone: null,
+  accountRole: null,
+  address: null,
+  pickupAddress: null,
+  addressVisible: false,
   synced: false,
   lang: 'en',
   role: 'buyer',
@@ -150,7 +159,15 @@ function reducer(state: State, action: Action): State {
       if (action.kind === 'messages') return { ...state, messages: action.rows.map(toMessage) }
       if (action.kind === 'profile') {
         const p = action.rows[0]
-        return { ...state, phoneVerified: p?.phone_verified ?? false, phone: p?.phone ?? null }
+        return {
+          ...state,
+          phoneVerified: p?.phone_verified ?? false,
+          phone: p?.phone ?? null,
+          accountRole: p?.role ?? null,
+          address: p?.address ?? null,
+          pickupAddress: p?.pickup_address ?? null,
+          addressVisible: p?.address_visible ?? false,
+        }
       }
       if (action.kind === 'reviewMarks') {
         const marks = new Set(action.rows.map((r) => r.review_id))
@@ -222,6 +239,11 @@ interface StoreCtx {
     cancelOrder: (id: string) => Promise<void>
     refreshTracking: (id: string) => Promise<{ advanced: number }>
     verifyPhone: (phone: string) => Promise<void>
+    updateProfile: (body: {
+      address?: string
+      pickupAddress?: string
+      addressVisible?: boolean
+    }) => Promise<void>
     addReview: (r: { orderId: string; rating: number; text: string; photos: string[] }) => Promise<void>
     toggleHelpful: (id: string) => Promise<void>
     uploadImage: (file: File) => Promise<string>
@@ -312,6 +334,10 @@ export function StoreProvider({
       },
       verifyPhone: async (phone) => {
         const r = await api('/api/profile', { phone, phoneVerified: true })
+        await wait('profile', r.txid)
+      },
+      updateProfile: async (body) => {
+        const r = await api('/api/profile', body)
         await wait('profile', r.txid)
       },
       addReview: async (r) => {
