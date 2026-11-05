@@ -42,8 +42,8 @@ export function ReviewsScreen() {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{state.accountRole === 'merchant' ? 'Customer reviews' : 'Your reviews & purchases'}</h1>
-            <p className="text-sm text-muted-foreground">{state.accountRole === 'merchant' ? 'See feedback from customers who completed an order with your business.' : 'Review delivered purchases and see feedback from other verified buyers.'}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{state.accountRole === 'merchant' ? 'Customer reviews' : 'Reviews & Purchases'}</h1>
+            <p className="text-sm text-muted-foreground">{state.accountRole === 'merchant' ? 'See feedback from customers who completed an order with your business.' : 'Review delivered purchases and see feedback from other buyers.'}</p>
           </div>
           {state.accountRole !== 'merchant' && <button
             type="button"
