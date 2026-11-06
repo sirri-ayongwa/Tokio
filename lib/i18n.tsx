@@ -273,7 +273,7 @@ const STRINGS: Record<AppLang, Record<string, string>> = {
     'orders.statusCancelled': 'Cancelled',
     'orders.track': 'Track order',
     'orders.sub': 'Every order confirmed from chat, in one place.',
-    'orders.revenue': 'Revenue (completed): {total}',
+    'orders.revenue': 'Earnings: {total}',
     'orders.total': 'Total orders',
     'orders.list': 'Order list',
     'orders.fromChat': 'From chat',
