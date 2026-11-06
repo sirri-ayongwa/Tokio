@@ -277,7 +277,6 @@ export function SettingsScreen() {
               {t('settings.save')}
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">{t('settings.addressHint')}</p>
         </section>
       </div>
     </div>

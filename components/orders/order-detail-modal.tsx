@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Loader2, MapPin, MessageSquareText, PenLine, RefreshCw, Truck, XCircle } from 'lucide-react'
+import { Loader2, MapPin, PenLine, RefreshCw, Truck, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -80,19 +80,6 @@ export function OrderDetailModal() {
             <Button type="button" variant="ghost" onClick={cancel} className="mr-auto text-destructive">
               <XCircle aria-hidden />
               {t('od.cancel')}
-            </Button>
-          )}
-          {order.fromChat && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                close()
-                dispatch({ type: 'setTab', tab: 'chat' })
-              }}
-            >
-              <MessageSquareText aria-hidden />
-              {t('od.openChat')}
             </Button>
           )}
           {delivered && order.status === 'completed' && !order.reviewed && (

@@ -44,8 +44,8 @@ export function ChatScreen() {
   if (!active) return <EmptyChat />
 
   return (
-    <div className="flex h-full">
-      <section aria-label={`Conversation with ${peerName}`} className="flex min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <section aria-label={`Conversation with ${peerName}`} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
           <span className="relative shrink-0">
             <span className="grid size-11 place-items-center rounded-full border bg-accent font-semibold text-primary">
@@ -137,7 +137,7 @@ export function ChatScreen() {
         <Composer onOpenAi={() => setAiOpen(true)} onSellerTyping={setSellerTyping} />
       </section>
 
-      <aside className={cn('hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-5 xl:block', state.accountRole === 'merchant' && 'xl:hidden')} aria-label="Shop details">
+      <aside className={cn('hidden h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l bg-card p-5 xl:block', state.accountRole === 'merchant' && 'xl:hidden')} aria-label="Shop details">
         <ChatInfoPanel />
       </aside>
 

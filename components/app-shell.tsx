@@ -77,7 +77,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background md:flex-row">
+    <div className="fixed inset-x-0 top-0 flex h-dvh max-h-dvh flex-col overflow-hidden bg-background md:flex-row">
       <aside className="hidden w-16 shrink-0 flex-col border-r bg-sidebar md:flex lg:w-60">
         <div className="hidden">
           <BrandMark />
@@ -156,7 +156,7 @@ export function AppShell() {
         </button>
       </header>
 
-      <main className="min-h-0 min-w-0 flex-1">
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {state.tab === 'chat' && <ChatScreen />}
         {state.tab === 'orders' && <OrdersScreen />}
         {state.tab === 'reviews' && <ReviewsScreen />}

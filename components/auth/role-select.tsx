@@ -8,7 +8,7 @@ import { TAGLINE } from '@/lib/constants'
 import { getStoredLang, useLang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
-const SPLASH_MS = 10_000
+const SPLASH_MS = 5_000
 
 const SPLASH_BUBBLES = [
   { size: 86, left: '8%', top: '13%', depth: -90, duration: 7.2, delay: -1.4 },
@@ -38,7 +38,9 @@ export function RoleSelect() {
       window.localStorage.setItem('tokio-prefs-v1', JSON.stringify({ ...prefs, lang: l }))
     } catch {}
   }
-  const [phase, setPhase] = useState<Phase | null>(null)
+  // Render the splash on the very first paint. Reading sessionStorage in an
+  // effect must never expose the role screen before we know whether it was seen.
+  const [phase, setPhase] = useState<Phase>('splash')
   const [fading, setFading] = useState(false)
 
   useEffect(() => {

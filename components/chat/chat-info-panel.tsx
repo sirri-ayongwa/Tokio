@@ -23,7 +23,9 @@ export function ChatInfoPanel() {
     <section className="text-center">
       <span className="relative mx-auto grid size-18 overflow-hidden rounded-2xl border bg-accent text-xl font-semibold text-primary">{conversation.merchant_avatar_url ? <Image src={conversation.merchant_avatar_url} alt="" fill unoptimized className="object-cover" /> : <span className="grid size-full place-items-center">{name[0]?.toUpperCase()}</span>}</span>
       <h2 className="mt-3 font-semibold">{name}</h2><p className="text-sm text-muted-foreground">{conversation.merchant_category || 'Merchant'}</p>
-      {websiteHref && <a href={websiteHref} target="_blank" rel="noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 text-xs text-primary hover:underline"><Globe className="size-3.5 shrink-0" /><span className="truncate">{conversation.merchant_website}</span><ExternalLink className="size-3 shrink-0" /></a>}
+      {websiteHref
+        ? <a href={websiteHref} target="_blank" rel="noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 text-xs text-primary hover:underline"><Globe className="size-3.5 shrink-0" /><span className="truncate">{conversation.merchant_website}</span><ExternalLink className="size-3 shrink-0" /></a>
+        : <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"><Globe className="size-3.5" />Website not added</p>}
       {conversation.merchant_verified && <VerifiedSellerBadge className="mt-2" />}
       <dl className="mt-4 grid grid-cols-3 divide-x rounded-xl border bg-background py-2.5 text-center">
         <div><dt className="text-[11px] text-muted-foreground">{t('info.rating')}</dt><dd className="inline-flex items-center gap-0.5 text-sm font-semibold"><Star className="size-3.5 fill-gold text-gold" />{avg.toFixed(1)}</dd></div>
